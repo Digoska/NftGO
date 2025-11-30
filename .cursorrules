@@ -1,0 +1,60 @@
+# Cursor AI Rules for NftGO Project
+
+## Project Context
+
+This is a **location-based NFT collection mobile app** (similar to Pokémon GO) built with:
+- React Native + Expo (SDK 54)
+- TypeScript
+- Supabase (PostgreSQL, Auth, Storage)
+- Expo Router (file-based routing)
+- Three.js for 3D model rendering
+
+## Current Status
+
+### ✅ Working Features
+- Authentication (Email/Password, Google OAuth, Apple Sign In)
+- NFT collection with filters
+- Home screen with stats, leaderboard, updates feed
+- User profiles with badges
+- 3D models (GLTF with external textures) - **WORKS IN EXPO GO**
+- Video NFTs
+- Image NFTs
+- Gamification (levels, streaks, coins)
+
+### ⚠️ Known Issues
+- **GLB models with embedded textures** - DO NOT WORK in Expo Go
+  - Error: "Creating blobs from 'ArrayBuffer' are not supported"
+  - Reason: React Native lacks native Blob API, expo-blob requires dev build
+  - Solution: Use GLTF format with external textures (works always)
+  - See: `GLB_TEXTURE_PROBLEM_DETAILED.md`, `GLTF_UPLOAD_GUIDE.md`
+
+## Key Files
+
+- `app/_layout.tsx` - Root layout, Blob polyfill setup (currently failing in Expo Go)
+- `components/nft/ModelNFT.tsx` - 3D model renderer (supports GLB/GLTF)
+- `app/(tabs)/wallet.tsx` - NFT collection screen
+- `lib/supabase.ts` - Supabase client configuration
+- `supabase-schema.sql` - Complete database schema
+
+## Important Notes
+
+1. **3D Models**: Always use GLTF with external textures for Expo Go compatibility
+2. **Database**: Run SQL migrations individually in Supabase SQL Editor
+3. **Environment**: Requires `.env` file with Supabase credentials
+4. **Expo Go Limitations**: Some features require development build (expo prebuild)
+
+## Code Style
+
+- TypeScript with strict mode
+- Functional components with hooks
+- Expo Router file-based routing
+- Supabase for backend (no custom API)
+- React Context for global state
+
+## When Adding Features
+
+- Check if it works in Expo Go (if not, document it)
+- Update database schema if needed
+- Add TypeScript types in `types/index.ts`
+- Follow existing component patterns
+
