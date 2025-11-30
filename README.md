@@ -1,6 +1,15 @@
 # 🎮 NftGO - Location-Based NFT Collection App
 
+<div align="center">
+
 > **Pokémon GO pre NFT** - Zbieraj NFT na základe geolokácie, buduj kolekcie, súťaž na leaderboarde a získavaj odmeny!
+
+[![React Native](https://img.shields.io/badge/React%20Native-0.81.5-61DAFB?logo=react)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-54.0.25-000020?logo=expo)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.2-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase)](https://supabase.com/)
+
+</div>
 
 ## 📋 O Projekte
 
@@ -201,43 +210,85 @@ nft-go/
 
 ## ⚠️ Aktuálny Problém: 3D Model Textúry
 
-### 🔴 Problém
+### 🔴 Problém - Kde sme stucknutí
 
 **GLB modely s embedded textúrami sa nenačítajú v Expo Go.**
 
-**Error:**
+#### Error v konzole:
 ```
 ERROR THREE.GLTFLoader: Couldn't load texture
 Error: Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not supported
 ```
 
-### 📊 Čo sa deje?
+#### Čo sa presne deje?
 
-1. **GLB formát** vkladá textúry priamo do binárnych dát súboru
-2. **GLTFLoader** (Three.js) potrebuje vytvoriť `Blob` objekt z ArrayBuffer
-3. **React Native nemá natívnu Blob API** podporu
-4. **expo-blob** polyfill **nefunguje v Expo Go** (vyžaduje native moduly)
+1. ✅ **GLB model sa načíta** - geometria (3D tvar) funguje
+2. ✅ **Animácie fungujú** - model sa animuje správne
+3. ❌ **Textúry sa nenačítajú** - model je bez farieb/textúr (šedý/bezfarebný)
+
+#### Technický detail:
+
+**GLB formát:**
+- GLB (GLTF Binary) je binárny formát
+- Textúry sú **vložené priamo do GLB súboru** ako binárne dáta
+- GLTFLoader musí extrahovať textúru z binárnych dát
+- Potrebuje vytvoriť **Blob objekt** z ArrayBuffer
+
+**Kde to zlyhá:**
+```javascript
+// GLTFLoader interná logika:
+const textureData = extractTextureFromGLB(binaryData); // ✅ Funguje
+const blob = new Blob([textureData], { type: 'image/png' }); // ❌ ZLYHÁVÁ
+```
+
+**Prečo zlyhá:**
+- React Native **nemá natívnu Blob API** podporu
+- `new Blob([ArrayBuffer])` nefunguje v React Native
+- `expo-blob` polyfill **nefunguje v Expo Go** (vyžaduje native moduly)
+
+#### Výsledok:
+
+- Model sa zobrazí, ale **bez textúr** (šedý/bezfarebný)
+- Animácie fungujú
+- Geometria funguje
+- Textúry **NEFUNGUJÚ**
+
+---
 
 ### ✅ Riešenia
 
-#### 1. **GLTF s Externými Textúrami** (Odporúčané pre Expo Go)
+#### 1. **GLTF s Externými Textúrami** ⭐ (Odporúčané pre Expo Go)
+
+**Ako to funguje:**
+- Export z Blenderu ako **GLTF Separate** (nie GLB)
+- Textúry sa exportujú ako **samostatné PNG/JPG súbory**
+- Upload všetky súbory na Supabase Storage (do toho istého folderu)
+- GLTFLoader načíta textúry z externých URL (funguje vždy)
 
 **Export z Blenderu:**
-- Format: `glTF Separate (.gltf + .bin + textures)`
-- Textúry sa exportujú ako samostatné PNG/JPG súbory
-- Upload všetky súbory na Supabase Storage (do toho istého folderu)
-- V databáze nastav `image_url` na `.gltf` súbor
+1. File → Export → glTF 2.0 (.gltf/.glb)
+2. Format: `glTF Separate (.gltf + .bin + textures)`
+3. ✅ Export Materials
+4. ✅ Export Textures
+5. Save
+
+**Upload na Supabase:**
+1. Storage → bucket `nfts`
+2. Upload **VŠETKY** súbory: `.gltf`, `.bin`, textúry (`.png`)
+3. Skopíruj Public URL k `.gltf` súboru
+4. V databáze nastav `image_url` na tento URL
 
 **Výhody:**
 - ✅ Funguje v Expo Go
 - ✅ Funguje vždy
 - ✅ Textúry sa načítajú správne
+- ✅ Animácie fungujú
 
 **Nevýhody:**
 - ❌ Viac súborov (gltf + bin + textúry)
 - ❌ Musíš uploadovať všetky súbory
 
-**Pozri:** `GLTF_UPLOAD_GUIDE.md` pre detailný návod
+**📖 Detailný návod:** `GLTF_UPLOAD_GUIDE.md`
 
 #### 2. **Development Build** (pre GLB s embedded textúrami)
 
@@ -258,12 +309,25 @@ npx expo run:android
 **Nevýhody:**
 - ❌ Nevyhnutný development build (nie Expo Go)
 - ❌ Vyžaduje Xcode/Android Studio
+- ❌ Dlhšie build časy
+
+---
+
+### 📊 Porovnanie Riešení
+
+| Riešenie | Expo Go | Dev Build | Textúry | Animácie | Súbory |
+|----------|---------|-----------|---------|----------|--------|
+| **GLB (embedded)** | ❌ | ✅ | ❌/✅ | ✅ | 1 |
+| **GLTF (externé)** | ✅ | ✅ | ✅ | ✅ | 3+ |
+
+---
 
 ### 📝 Dokumentácia
 
-- `GLB_TEXTURE_PROBLEM_DETAILED.md` - Detailný popis problému
-- `GLTF_UPLOAD_GUIDE.md` - Návod na upload GLTF s textúrami
+- `GLB_TEXTURE_PROBLEM_DETAILED.md` - Detailný technický popis problému
+- `GLTF_UPLOAD_GUIDE.md` - Krok-za-krokom návod na upload GLTF
 - `EXPO_BLOB_EXPO_GO_LIMITATION.md` - Expo Go obmedzenia
+- `PROBLEM_SUHRN_SK.md` - Krátky súhrn v slovenčine
 
 ---
 
@@ -315,46 +379,68 @@ Všetky migrácie sú v markdown súboroch:
 
 ## 📚 Pre Cursor AI / Vývojárov
 
-### Kontext Projektu
+### 🎯 Kontext Projektu
 
 Tento projekt je **location-based NFT collection app** podobná Pokémon GO. Používatelia zbierajú NFT na základe geolokácie, budujú kolekcie a súťažia na leaderboarde.
 
-### Aktuálny Status
+### ✅ Aktuálny Status
 
 - ✅ **Základné funkcie** - fungujú
-- ✅ **Autentifikácia** - funguje
-- ✅ **NFT Collection** - funguje
+- ✅ **Autentifikácia** - funguje (Email, Google, Apple)
+- ✅ **NFT Collection** - funguje s filtrami
 - ✅ **3D modely (GLTF)** - fungujú s externými textúrami
+- ✅ **Video NFTs** - fungujú
+- ✅ **Image NFTs** - fungujú
 - ⚠️ **3D modely (GLB)** - nefungujú v Expo Go (potrebuje dev build)
 
-### Kľúčové Súbory
+### 🔴 Kde sme stucknutí
 
-- `app/_layout.tsx` - Root layout, Blob polyfill setup
-- `components/nft/ModelNFT.tsx` - 3D model renderer
+**GLB modely s embedded textúrami nefungujú v Expo Go.**
+
+**Problém:**
+- GLB vkladá textúry do binárnych dát
+- GLTFLoader potrebuje Blob API na extrakciu textúr
+- React Native nemá Blob API
+- `expo-blob` polyfill nefunguje v Expo Go
+
+**Riešenie:**
+- ✅ Použi **GLTF s externými textúrami** (funguje vždy)
+- ⚠️ Alebo **Development Build** (pre GLB)
+
+**Pozri:** Sekciu "Aktuálny Problém" vyššie pre detailný popis.
+
+### 📂 Kľúčové Súbory
+
+- `app/_layout.tsx` - Root layout, Blob polyfill setup (nefunguje v Expo Go)
+- `components/nft/ModelNFT.tsx` - 3D model renderer (GLB/GLTF)
 - `app/(tabs)/wallet.tsx` - NFT collection screen
-- `lib/supabase.ts` - Supabase client
-- `supabase-schema.sql` - Database schema
+- `lib/supabase.ts` - Supabase client configuration
+- `supabase-schema.sql` - Complete database schema
 
-### Časté Problémy
+### 🐛 Časté Problémy
 
-1. **GLB textúry sa nenačítajú**
-   - **Riešenie:** Použi GLTF s externými textúrami
-   - **Pozri:** `GLTF_UPLOAD_GUIDE.md`
+#### 1. GLB textúry sa nenačítajú
+- **Error:** `Creating blobs from 'ArrayBuffer' are not supported`
+- **Riešenie:** Použi GLTF s externými textúrami
+- **Pozri:** `GLTF_UPLOAD_GUIDE.md`
 
-2. **expo-blob nefunguje**
-   - **Dôvod:** Vyžaduje native moduly (nefunguje v Expo Go)
-   - **Riešenie:** Development build alebo GLTF s externými textúrami
+#### 2. expo-blob nefunguje
+- **Dôvod:** Vyžaduje native moduly (nefunguje v Expo Go)
+- **Riešenie:** Development build alebo GLTF s externými textúrami
+- **Pozri:** `EXPO_BLOB_EXPO_GO_LIMITATION.md`
 
-3. **NFT sa nezobrazujú**
-   - Skontroluj `media_type` v databáze (`'image'`, `'video'`, `'model'`)
-   - Skontroluj `image_url` - musí byť validný URL
-   - Pre GLTF: URL musí ukazovať na `.gltf` súbor
+#### 3. NFT sa nezobrazujú
+- Skontroluj `media_type` v databáze (`'image'`, `'video'`, `'model'`)
+- Skontroluj `image_url` - musí byť validný URL
+- Pre GLTF: URL musí ukazovať na `.gltf` súbor
 
-### Ďalšie Dokumenty
+### 📖 Ďalšie Dokumenty
 
 - `PROJECT_SUMMARY.md` - Kompletný súhrn projektu
-- `GLB_TEXTURE_PROBLEM_DETAILED.md` - Detailný popis problému s textúrami
-- `GLTF_UPLOAD_GUIDE.md` - Návod na upload GLTF modelov
+- `GLB_TEXTURE_PROBLEM_DETAILED.md` - Detailný technický popis problému
+- `GLTF_UPLOAD_GUIDE.md` - Krok-za-krokom návod na upload GLTF
+- `PROBLEM_SUHRN_SK.md` - Krátky súhrn problému v slovenčine
+- `CONTRIBUTING.md` - Pre vývojárov
 
 ---
 
@@ -374,10 +460,32 @@ MIT
 
 ## 👥 Kontakt & Podpora
 
-Pre otázky alebo problémy, pozri dokumentáciu v root adresári alebo vytvor issue.
+Pre otázky alebo problémy:
+- Pozri dokumentáciu v root adresári
+- Vytvor [GitHub Issue](https://github.com/Digoska/NftGO/issues)
+- Pozri `CONTRIBUTING.md` pre development guidelines
 
 **Dôležité:** Tento projekt je v aktívnom vývoji. Niektoré funkcie môžu byť experimentálne.
 
 ---
 
+## 🎯 Súhrn
+
+**NftGO** je location-based NFT collection aplikácia s:
+- ✅ Kompletnou autentifikáciou
+- ✅ Gamifikáciou (levels, streaks, coins, leaderboard)
+- ✅ 3D model podporou (GLTF funguje, GLB potrebuje dev build)
+- ✅ Moderným UI s animáciami
+- ⚠️ **Aktuálny problém:** GLB embedded textúry nefungujú v Expo Go
+
+**Riešenie:** Použi GLTF s externými textúrami (funguje vždy) ✅
+
+---
+
+<div align="center">
+
 **Vytvorené s ❤️ pomocou React Native, Expo a Supabase**
+
+[![GitHub](https://img.shields.io/badge/GitHub-Digoska%2FNftGO-181717?logo=github)](https://github.com/Digoska/NftGO)
+
+</div>
