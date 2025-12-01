@@ -75,12 +75,14 @@ Podobne ako Pokémon GO, používatelia:
 
 ```bash
 # Klonuj repo
-git clone <repo-url>
-cd nft-go
+git clone https://github.com/Digoska/NftGO.git
+cd NftGO
 
 # Inštaluj závislosti
 npm install
 ```
+
+**📱 Pre Android build:** Pozri `ANDROID_BUILD_GUIDE.md` pre detailný step-by-step návod
 
 ### 2. Environment Variables
 
