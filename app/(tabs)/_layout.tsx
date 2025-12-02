@@ -16,6 +16,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="map"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary, // Purple/pink for active tabs
