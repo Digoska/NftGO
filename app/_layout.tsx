@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '../lib/auth-context';
 import { useEffect } from 'react';
+import { requestNotificationPermissions, setupNotificationListeners } from '../lib/notifications';
 
 // Setup Blob polyfill from expo-blob
 // This must be done BEFORE any modules that use Blob API (like GLTFLoader)
@@ -66,6 +67,39 @@ export default function RootLayout() {
         console.warn('⚠️ Could not load Blob polyfill:', error);
       }
     }
+  }, []);
+
+  // Initialize notifications
+  useEffect(() => {
+    // Request permissions on app start
+    requestNotificationPermissions().then((granted) => {
+      if (granted) {
+        console.log('✅ Notification permissions granted');
+      } else {
+        console.log('⚠️ Notification permissions not granted');
+      }
+    });
+
+    // Setup notification listeners
+    const unsubscribe = setupNotificationListeners(
+      (notification) => {
+        console.log('📱 Notification received:', notification);
+      },
+      (response) => {
+        console.log('👆 Notification tapped:', response);
+        // Handle notification tap - navigate to relevant screen
+        const data = response.notification.request.content.data;
+        if (data?.type === 'nft_collected') {
+          // Navigate to wallet/collection
+        } else if (data?.type === 'level_up') {
+          // Navigate to profile
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return (
