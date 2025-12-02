@@ -55,6 +55,14 @@ module.exports = {
           locationAlwaysAndWhenInUsePermission: 'NftGO needs access to your location to collect NFTs nearby.',
         },
       ],
+      [
+        'expo-notifications',
+        {
+          icon: './assets/NftGO-2.png',
+          color: '#7C3AED',
+          sounds: [],
+        },
+      ],
       'expo-apple-authentication',
       'expo-file-system',
     ],
