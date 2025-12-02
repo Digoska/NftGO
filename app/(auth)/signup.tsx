@@ -281,14 +281,28 @@ export default function SignupScreen() {
       let avatarUrl = null;
       if (avatarUri) {
         try {
-          const fileExt = avatarUri.split('.').pop() || 'jpg';
-          const fileName = `${currentUser.id}-${Date.now()}.${fileExt}`;
-          const filePath = `avatars/${fileName}`;
-
+          // Validate file before upload
+          const { validateAvatarFile, generateSafeFilename, getBase64FileSize } = await import('../../lib/file-validation');
+          
           // Read file as base64
           const base64 = await FileSystem.readAsStringAsync(avatarUri, {
             encoding: FileSystem.EncodingType.Base64,
           });
+
+          // Validate file size
+          const fileSize = getBase64FileSize(base64);
+          const validation = validateAvatarFile(avatarUri, fileSize);
+          
+          if (!validation.valid) {
+            console.warn('Avatar validation failed:', validation.error);
+            Alert.alert('Invalid File', validation.error || 'Please select a valid image file.');
+            setLoading(false);
+            return;
+          }
+
+          const fileExt = avatarUri.split('.').pop()?.toLowerCase() || 'jpg';
+          const fileName = generateSafeFilename(currentUser.id, `avatar.${fileExt}`);
+          const filePath = `avatars/${fileName}`;
 
           // Convert base64 to ArrayBuffer
           const byteCharacters = atob(base64);
