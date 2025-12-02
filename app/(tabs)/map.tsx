@@ -116,6 +116,7 @@ export default function MapScreen() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
+        provider={Platform.OS === 'ios' ? undefined : undefined} // iOS uses Apple Maps (free), Android uses Google Maps
         showsUserLocation
         showsMyLocationButton={false}
         mapType="standard"
