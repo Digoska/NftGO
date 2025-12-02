@@ -514,7 +514,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: spacing.md,
   },
   rarityCard: {
     width: '48%',
@@ -529,6 +528,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    marginBottom: spacing.md,
   },
   rarityIconContainer: {
     marginBottom: spacing.xs,
