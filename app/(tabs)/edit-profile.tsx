@@ -174,22 +174,6 @@ export default function EditProfileScreen() {
       let avatarUrl = userProfile?.avatar_url || null;
       if (avatarUri && avatarUri !== userProfile?.avatar_url) {
         try {
-          const fileExt = avatarUri.split('.').pop() || 'jpg';
-          const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-          const filePath = `avatars/${fileName}`;
-
-          // Delete old avatar if exists
-          if (userProfile?.avatar_url && userProfile.avatar_url.includes('/avatars/')) {
-            try {
-              const oldPath = userProfile.avatar_url.split('/avatars/')[1];
-              if (oldPath) {
-                await supabase.storage.from('avatars').remove([oldPath]);
-              }
-            } catch (deleteError) {
-              console.warn('Error deleting old avatar:', deleteError);
-            }
-          }
-
           // Validate file before upload
           const { validateAvatarFile, generateSafeFilename, getBase64FileSize } = require('../../lib/file-validation');
 
@@ -207,6 +191,18 @@ export default function EditProfileScreen() {
             Alert.alert('Invalid File', validation.error || 'Please select a valid image file.');
             setLoading(false);
             return;
+          }
+
+          // Delete old avatar if exists
+          if (userProfile?.avatar_url && userProfile.avatar_url.includes('/avatars/')) {
+            try {
+              const oldPath = userProfile.avatar_url.split('/avatars/')[1];
+              if (oldPath) {
+                await supabase.storage.from('avatars').remove([oldPath]);
+              }
+            } catch (deleteError) {
+              console.warn('Error deleting old avatar:', deleteError);
+            }
           }
 
           const fileExt = avatarUri.split('.').pop()?.toLowerCase() || 'jpg';
