@@ -17,7 +17,13 @@ export default function TermsOfServiceScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push('/(tabs)/profile');
+            }
+          }}
         >
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
