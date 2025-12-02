@@ -220,32 +220,28 @@ export default function ProfileScreen() {
 
       <View style={styles.settingsContainer}>
         <Text style={styles.sectionTitle}>Settings</Text>
-        <TouchableOpacity
-          style={styles.settingItem}
-          onPress={() => router.push('/(tabs)/edit-profile')}
-        >
-          <Text style={styles.settingText}>Edit Profile</Text>
-          <Text style={styles.settingArrow}>›</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.settingItem}>
           <Text style={styles.settingText}>Notifications</Text>
           <Text style={styles.settingArrow}>›</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.settingItem}
-          onPress={() => router.push('/(auth)/privacy-policy')}
+          onPress={() => router.push('/(tabs)/privacy-policy')}
         >
           <Text style={styles.settingText}>Privacy Policy</Text>
           <Text style={styles.settingArrow}>›</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.settingItem}
-          onPress={() => router.push('/(auth)/terms-of-service')}
+          onPress={() => router.push('/(tabs)/terms-of-service')}
         >
           <Text style={styles.settingText}>Terms of Service</Text>
           <Text style={styles.settingArrow}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.settingItem}>
+        <TouchableOpacity
+          style={styles.settingItem}
+          onPress={() => router.push('/(tabs)/about')}
+        >
           <Text style={styles.settingText}>About</Text>
           <Text style={styles.settingArrow}>›</Text>
         </TouchableOpacity>
