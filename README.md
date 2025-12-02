@@ -82,7 +82,7 @@ cd NftGO
 npm install
 ```
 
-**📱 Pre Android build:** Pozri `ANDROID_BUILD_GUIDE.md` pre detailný step-by-step návod
+**📱 Pre Android build:** Pozri [`docs/setup/ANDROID_BUILD_GUIDE.md`](./docs/setup/ANDROID_BUILD_GUIDE.md) pre detailný step-by-step návod
 
 ### 2. Environment Variables
 
@@ -290,7 +290,7 @@ const blob = new Blob([textureData], { type: 'image/png' }); // ❌ ZLYHÁVÁ
 - ❌ Viac súborov (gltf + bin + textúry)
 - ❌ Musíš uploadovať všetky súbory
 
-**📖 Detailný návod:** `GLTF_UPLOAD_GUIDE.md`
+**📖 Detailný návod:** [`docs/3d-models/GLTF_UPLOAD_GUIDE.md`](./docs/3d-models/GLTF_UPLOAD_GUIDE.md)
 
 #### 2. **Development Build** (pre GLB s embedded textúrami)
 
@@ -326,10 +326,13 @@ npx expo run:android
 
 ### 📝 Dokumentácia
 
-- `GLB_TEXTURE_PROBLEM_DETAILED.md` - Detailný technický popis problému
-- `GLTF_UPLOAD_GUIDE.md` - Krok-za-krokom návod na upload GLTF
-- `EXPO_BLOB_EXPO_GO_LIMITATION.md` - Expo Go obmedzenia
-- `PROBLEM_SUHRN_SK.md` - Krátky súhrn v slovenčine
+Všetka dokumentácia je v [`docs/`](./docs/) adresári:
+- [`docs/troubleshooting/GLB_TEXTURE_PROBLEM_DETAILED.md`](./docs/troubleshooting/GLB_TEXTURE_PROBLEM_DETAILED.md) - Detailný technický popis problému
+- [`docs/3d-models/GLTF_UPLOAD_GUIDE.md`](./docs/3d-models/GLTF_UPLOAD_GUIDE.md) - Krok-za-krokom návod na upload GLTF
+- [`docs/troubleshooting/EXPO_BLOB_EXPO_GO_LIMITATION.md`](./docs/troubleshooting/EXPO_BLOB_EXPO_GO_LIMITATION.md) - Expo Go obmedzenia
+- [`docs/troubleshooting/PROBLEM_SUHRN_SK.md`](./docs/troubleshooting/PROBLEM_SUHRN_SK.md) - Krátky súhrn v slovenčine
+
+**📚 Kompletný index:** [`docs/README.md`](./docs/README.md)
 
 ---
 
@@ -354,10 +357,10 @@ npx expo run:android
 
 ### Migrácie
 
-Všetky migrácie sú v markdown súboroch:
-- `HOME_SCREEN_MIGRATION.md` - Home screen features
-- `PROFILE_ENHANCEMENT_MIGRATION.md` - Profile enhancements
-- `ANIMATED_NFT_MIGRATION.md` - 3D model support
+Všetky migrácie sú v [`docs/migrations/`](./docs/migrations/):
+- [`HOME_SCREEN_MIGRATION.md`](./docs/migrations/HOME_SCREEN_MIGRATION.md) - Home screen features
+- [`PROFILE_ENHANCEMENT_MIGRATION.md`](./docs/migrations/PROFILE_ENHANCEMENT_MIGRATION.md) - Profile enhancements
+- [`ANIMATED_NFT_MIGRATION.md`](./docs/migrations/ANIMATED_NFT_MIGRATION.md) - 3D model support
 
 **Dôležité:** Spúšťaj každý SQL príkaz **samostatne** v Supabase SQL Editor!
 
@@ -424,12 +427,12 @@ Tento projekt je **location-based NFT collection app** podobná Pokémon GO. Pou
 #### 1. GLB textúry sa nenačítajú
 - **Error:** `Creating blobs from 'ArrayBuffer' are not supported`
 - **Riešenie:** Použi GLTF s externými textúrami
-- **Pozri:** `GLTF_UPLOAD_GUIDE.md`
+- **Pozri:** [`docs/3d-models/GLTF_UPLOAD_GUIDE.md`](./docs/3d-models/GLTF_UPLOAD_GUIDE.md)
 
 #### 2. expo-blob nefunguje
 - **Dôvod:** Vyžaduje native moduly (nefunguje v Expo Go)
 - **Riešenie:** Development build alebo GLTF s externými textúrami
-- **Pozri:** `EXPO_BLOB_EXPO_GO_LIMITATION.md`
+- **Pozri:** [`docs/troubleshooting/EXPO_BLOB_EXPO_GO_LIMITATION.md`](./docs/troubleshooting/EXPO_BLOB_EXPO_GO_LIMITATION.md)
 
 #### 3. NFT sa nezobrazujú
 - Skontroluj `media_type` v databáze (`'image'`, `'video'`, `'model'`)
@@ -438,11 +441,12 @@ Tento projekt je **location-based NFT collection app** podobná Pokémon GO. Pou
 
 ### 📖 Ďalšie Dokumenty
 
-- `PROJECT_SUMMARY.md` - Kompletný súhrn projektu
-- `GLB_TEXTURE_PROBLEM_DETAILED.md` - Detailný technický popis problému
-- `GLTF_UPLOAD_GUIDE.md` - Krok-za-krokom návod na upload GLTF
-- `PROBLEM_SUHRN_SK.md` - Krátky súhrn problému v slovenčine
-- `CONTRIBUTING.md` - Pre vývojárov
+Všetka dokumentácia je organizovaná v [`docs/`](./docs/) adresári:
+- [`docs/README.md`](./docs/README.md) - Index všetkej dokumentácie
+- [`docs/quick-reference/PROJECT_SUMMARY.md`](./docs/quick-reference/PROJECT_SUMMARY.md) - Kompletný súhrn projektu
+- [`docs/troubleshooting/GLB_TEXTURE_PROBLEM_DETAILED.md`](./docs/troubleshooting/GLB_TEXTURE_PROBLEM_DETAILED.md) - Detailný technický popis problému
+- [`docs/3d-models/GLTF_UPLOAD_GUIDE.md`](./docs/3d-models/GLTF_UPLOAD_GUIDE.md) - Krok-za-krokom návod na upload GLTF
+- [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) - Pre vývojárov
 
 ---
 
@@ -463,9 +467,9 @@ MIT
 ## 👥 Kontakt & Podpora
 
 Pre otázky alebo problémy:
-- Pozri dokumentáciu v root adresári
+- Pozri [`docs/README.md`](./docs/README.md) pre kompletný index dokumentácie
 - Vytvor [GitHub Issue](https://github.com/Digoska/NftGO/issues)
-- Pozri `CONTRIBUTING.md` pre development guidelines
+- Pozri [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) pre development guidelines
 
 **Dôležité:** Tento projekt je v aktívnom vývoji. Niektoré funkcie môžu byť experimentálne.
 
@@ -486,7 +490,7 @@ Pre otázky alebo problémy:
 
 <div align="center">
 
-**Vytvorené s ❤️ pomocou React Native, Expo a Supabase**
+**done by Digo**
 
 [![GitHub](https://img.shields.io/badge/GitHub-Digoska%2FNftGO-181717?logo=github)](https://github.com/Digoska/NftGO)
 
