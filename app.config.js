@@ -23,7 +23,7 @@ module.exports = {
         NSLocationAlwaysUsageDescription: 'NftGO needs access to your location to collect NFTs nearby.',
       },
       config: {
-        googleMapsApiKey: 'YOUR_GOOGLE_MAPS_API_KEY',
+        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
       },
     },
     android: {

@@ -122,8 +122,8 @@ export default function SignupScreen() {
   };
 
   const handlePasswordSubmit = async () => {
-    // Validate password strength
-    const hasMinLength = password.length >= 6;
+    // Validate password strength (minimum 8 characters for security)
+    const hasMinLength = password.length >= 8;
     const hasNumber = /\d/.test(password);
     const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
