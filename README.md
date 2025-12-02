@@ -117,6 +117,8 @@ npm run android
 
 ## 📁 Projektová Štruktúra
 
+**📖 Kompletný prehľad:** [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md)
+
 ```
 nft-go/
 ├── app/                          # Expo Router screens (file-based routing)
