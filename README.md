@@ -449,6 +449,7 @@ Všetka dokumentácia je organizovaná v [`docs/`](./docs/) adresári:
 - [`docs/troubleshooting/GLB_TEXTURE_PROBLEM_DETAILED.md`](./docs/troubleshooting/GLB_TEXTURE_PROBLEM_DETAILED.md) - Detailný technický popis problému
 - [`docs/3d-models/GLTF_UPLOAD_GUIDE.md`](./docs/3d-models/GLTF_UPLOAD_GUIDE.md) - Krok-za-krokom návod na upload GLTF
 - [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) - Pre vývojárov
+- [`docs/PRE_MVP_CHECKLIST.md`](./docs/PRE_MVP_CHECKLIST.md) - **Pre-MVP Shipping Checklist** (security, testing, deployment)
 
 ---
 
