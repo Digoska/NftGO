@@ -22,6 +22,8 @@ module.exports = {
         NSLocationAlwaysAndWhenInUseUsageDescription: 'NftGO needs access to your location to collect NFTs nearby.',
         NSLocationAlwaysUsageDescription: 'NftGO needs access to your location to collect NFTs nearby.',
       },
+      // iOS uses Apple Maps (FREE, no API key needed)
+      // Google Maps API key is only for Android
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
       },
