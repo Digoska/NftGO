@@ -291,8 +291,9 @@ export function setupNotificationListeners(
   );
 
   return () => {
-    Notifications.removeNotificationSubscription(receivedListener);
-    Notifications.removeNotificationSubscription(responseListener);
+    // Remove subscriptions by calling .remove() on each subscription object
+    receivedListener.remove();
+    responseListener.remove();
   };
 }
 
