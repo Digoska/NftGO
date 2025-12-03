@@ -366,7 +366,6 @@ export default function WalletScreen() {
                       ) : selectedNFT.media_type === 'model' ? (
                         <ModelNFT
                           uri={selectedNFT.image_url}
-                          modelFormat="glb"
                           style={styles.detailImage}
                         />
                       ) : (
@@ -517,7 +516,6 @@ function NFTCard({
             ) : nft.media_type === 'model' ? (
               <ModelNFT
                 uri={nft.image_url}
-                modelFormat="glb"
                 style={styles.nftImage}
               />
             ) : (

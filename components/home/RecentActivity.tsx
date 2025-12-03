@@ -87,7 +87,6 @@ export default function RecentActivity({
                 ) : nft.media_type === 'model' ? (
                   <ModelNFT
                     uri={nft.image_url}
-                    modelFormat="glb"
                     style={styles.image}
                   />
                 ) : (
