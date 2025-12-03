@@ -166,21 +166,64 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
       
       try {
         if (detectedFormat === 'gltf' || detectedFormat === 'glb') {
-          // GLTF/GLB loader with custom LoadingManager to suppress texture errors
+          // GLTF/GLB loader with custom LoadingManager
           const loadingManager = new THREE.LoadingManager();
           
-          // Suppress texture loading errors in LoadingManager
-          loadingManager.onError = (url: string) => {
-            // Silently ignore texture loading errors for GLB embedded textures
-            if (url.includes('texture') || url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg')) {
-              return; // Suppress texture errors
+          // Resolve relative paths for GLTF external textures
+          // GLTFLoader automatically resolves relative paths based on the GLTF file's URL
+          // This ensures textures in the same directory are found correctly
+          loadingManager.setURLModifier((url: string) => {
+            // If URL is relative (doesn't start with http:// or https://)
+            if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:')) {
+              // Resolve relative path based on GLTF file's directory
+              const gltfUrl = new URL(uri);
+              const basePath = gltfUrl.pathname.substring(0, gltfUrl.pathname.lastIndexOf('/') + 1);
+              const resolvedUrl = new URL(url, gltfUrl.origin + basePath);
+              console.log(`🔗 Resolved relative path: ${url} → ${resolvedUrl.href}`);
+              return resolvedUrl.href;
             }
-            // Only log non-texture errors
+            return url;
+          });
+          
+          // Handle loading errors with better logging
+          loadingManager.onError = (url: string) => {
+            // For GLB format, embedded textures may fail (Blob API limitation)
+            if (detectedFormat === 'glb') {
+              if (url.includes('texture') || url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg')) {
+                console.warn(`⚠️ GLB embedded texture failed to load: ${url}`);
+                console.warn('💡 Tip: Use GLTF format with external textures for Expo Go compatibility');
+                return; // Suppress texture errors for GLB (expected in Expo Go)
+              }
+            }
+            // For GLTF format, texture loading errors should be logged
+            if (detectedFormat === 'gltf') {
+              console.error(`❌ GLTF texture failed to load: ${url}`);
+              console.error('💡 Check that texture file exists and is in the same directory as .gltf file');
+            }
+            // Log non-texture errors
             console.warn('⚠️ Failed to load resource:', url);
           };
           
+          // Track texture loading progress for GLTF
+          if (detectedFormat === 'gltf') {
+            loadingManager.onLoad = () => {
+              console.log('✅ All GLTF resources loaded successfully');
+            };
+            loadingManager.onProgress = (url: string, loaded: number, total: number) => {
+              if (url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg') || url.includes('.bin')) {
+                console.log(`📦 Loading GLTF resource ${loaded}/${total}: ${url.split('/').pop()}`);
+              }
+            };
+          }
+          
           const loader = new GLTFLoader(loadingManager);
           console.log(`🔄 Loading ${detectedFormat.toUpperCase()} model from:`, uri);
+          
+          if (detectedFormat === 'gltf') {
+            console.log('📝 GLTF format detected - external textures will be loaded from URLs');
+          } else {
+            console.log('📦 GLB format detected - embedded textures may not work in Expo Go');
+          }
           
           const gltf = await loader.loadAsync(uri);
           model = gltf.scene;
@@ -190,13 +233,15 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
           console.log('📊 Model info:', {
             animations: animations.length,
             scenes: model.children.length,
+            format: detectedFormat.toUpperCase(),
           });
           
-          // For GLTF (not GLB), textures are external and should load fine
-          // For GLB, textures are embedded and may not load (Blob API limitation)
+          // Check texture loading status
           if (model) {
             let textureCount = 0;
             let loadedTextures = 0;
+            const textureDetails: string[] = [];
+            
             model.traverse((child: any) => {
               if (child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -208,6 +253,9 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
                       if (texture.image) {
                         texture.needsUpdate = true;
                         loadedTextures++;
+                        textureDetails.push(`${prop}: ✅ loaded`);
+                      } else {
+                        textureDetails.push(`${prop}: ❌ failed`);
                       }
                     }
                   });
@@ -215,11 +263,25 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
                 });
               }
             });
+            
             if (textureCount > 0) {
               console.log(`🖼️ Textures: ${loadedTextures}/${textureCount} loaded`);
-              if (detectedFormat === 'glb' && loadedTextures < textureCount) {
-                console.warn('⚠️ GLB embedded textures may not load (use GLTF format instead)');
+              if (detectedFormat === 'gltf') {
+                if (loadedTextures === textureCount) {
+                  console.log('✅ All GLTF external textures loaded successfully!');
+                } else {
+                  console.warn(`⚠️ Some GLTF textures failed to load (${textureCount - loadedTextures} failed)`);
+                  console.warn('💡 Ensure all texture files are uploaded to the same directory as .gltf file');
+                }
+                textureDetails.forEach(detail => console.log(`   ${detail}`));
+              } else if (detectedFormat === 'glb') {
+                if (loadedTextures < textureCount) {
+                  console.warn('⚠️ GLB embedded textures may not load in Expo Go (Blob API limitation)');
+                  console.warn('💡 Solution: Export as GLTF format with external textures');
+                }
               }
+            } else {
+              console.log('ℹ️ No textures found in model - using default materials');
             }
           }
         } else if (detectedFormat === 'obj') {
