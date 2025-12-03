@@ -65,7 +65,8 @@ SQL skripty a API príklady:
 
 ### 📅 [Daily Documentation](./)
 Denné záznamy zmien a implementácií:
-- **[2025-12-03.md](./2025-12-03.md)** ⭐ - GLTF External Texture Support Implementation (Expo Go fix)
+- **[2025-12-03-infinite-loading-fix.md](./2025-12-03-infinite-loading-fix.md)** ⭐ - Infinite Loading State Fix for GLTF Models
+- **[2025-12-03.md](./2025-12-03.md)** - GLTF External Texture Support Implementation (Expo Go fix)
 
 ---
 
