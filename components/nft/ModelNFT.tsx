@@ -44,8 +44,19 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loadingCompleteRef = useRef<boolean>(false);
   const uriRef = useRef<string>(uri);
+  const loadingUrlRef = useRef<string | null>(null);
 
   const onGLContextCreate = async (gl: any) => {
+    // Load guard: Prevent duplicate loading attempts for the same URI
+    // If we're already loading this URI, skip this attempt
+    if (loadingUrlRef.current === uri) {
+      console.log('⏭️ Skipping duplicate load attempt for:', uri);
+      return;
+    }
+    
+    // Mark this URI as loading
+    loadingUrlRef.current = uri;
+    
     try {
       // Fix for EXGL: gl.pixelStorei() doesn't support this parameter yet!
       // Workaround from: https://github.com/pmndrs/react-three-fiber/issues/2574
@@ -171,14 +182,16 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
       setError(null);
       setLoadingProgress(0);
       
-      // Set up 30-second timeout to prevent infinite loading
-      const TIMEOUT_MS = 30000; // 30 seconds
+      // Set up 60-second timeout to prevent infinite loading
+      // Increased from 30s to accommodate larger files on mobile networks
+      const TIMEOUT_MS = 60000; // 60 seconds
       timeoutRef.current = setTimeout(() => {
         if (!loadingCompleteRef.current) {
-          console.error('⏱️ Model loading timeout after 30 seconds');
+          console.error('⏱️ Model loading timeout after 60 seconds');
           setError('Network timeout: Model took too long to load. Please check your connection and try again.');
           setLoading(false);
           loadingCompleteRef.current = true;
+          loadingUrlRef.current = null; // Clear loading guard on timeout
           restoreConsole();
         }
       }, TIMEOUT_MS);
@@ -190,6 +203,7 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
           timeoutRef.current = null;
         }
         loadingCompleteRef.current = true;
+        loadingUrlRef.current = null; // Clear loading guard on completion
         if (success) {
           setLoading(false);
         }
@@ -441,6 +455,7 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
           timeoutRef.current = null;
         }
         loadingCompleteRef.current = true;
+        loadingUrlRef.current = null; // Clear loading guard on error
         setLoading(false);
         restoreConsole();
         return;
@@ -567,6 +582,7 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
         timeoutRef.current = null;
       }
       loadingCompleteRef.current = true;
+      loadingUrlRef.current = null; // Clear loading guard on error
       setLoading(false);
       // Restore console (defined in outer scope)
       const originalWarn = console.warn;
@@ -581,6 +597,10 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
   // Update uriRef when uri changes to prevent stale closures
   useEffect(() => {
     uriRef.current = uri;
+    // Reset loading guard when URI changes (new model to load)
+    if (loadingUrlRef.current !== uri) {
+      loadingUrlRef.current = null;
+    }
   }, [uri]);
 
   useEffect(() => {
@@ -594,6 +614,8 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      // Clear loading guard on unmount
+      loadingUrlRef.current = null;
     };
   }, []);
 
