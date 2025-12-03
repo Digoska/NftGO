@@ -33,6 +33,7 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
   })();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<Renderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -40,6 +41,9 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
   const animationMixerRef = useRef<THREE.AnimationMixer | null>(null);
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const animationFrameRef = useRef<number | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadingCompleteRef = useRef<boolean>(false);
+  const uriRef = useRef<string>(uri);
 
   const onGLContextCreate = async (gl: any) => {
     try {
@@ -161,6 +165,37 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
       // GLTF (not GLB) and OBJ formats work better in React Native because textures are external
       restoreConsole();
       
+      // Reset loading state
+      loadingCompleteRef.current = false;
+      setLoading(true);
+      setError(null);
+      setLoadingProgress(0);
+      
+      // Set up 30-second timeout to prevent infinite loading
+      const TIMEOUT_MS = 30000; // 30 seconds
+      timeoutRef.current = setTimeout(() => {
+        if (!loadingCompleteRef.current) {
+          console.error('⏱️ Model loading timeout after 30 seconds');
+          setError('Network timeout: Model took too long to load. Please check your connection and try again.');
+          setLoading(false);
+          loadingCompleteRef.current = true;
+          restoreConsole();
+        }
+      }, TIMEOUT_MS);
+      
+      // Helper function to clear timeout and mark as complete
+      const completeLoading = (success: boolean) => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        loadingCompleteRef.current = true;
+        if (success) {
+          setLoading(false);
+        }
+        restoreConsole();
+      };
+      
       let model: THREE.Group;
       let animations: THREE.AnimationClip[] = [];
       
@@ -169,9 +204,11 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
           // GLTF/GLB loader with custom LoadingManager
           const loadingManager = new THREE.LoadingManager();
           
+          // Track total resources to load for progress calculation
+          let totalResources = 1; // Start with 1 for the main file
+          let loadedResources = 0;
+          
           // Resolve relative paths for GLTF external textures
-          // GLTFLoader automatically resolves relative paths based on the GLTF file's URL
-          // This ensures textures in the same directory are found correctly
           loadingManager.setURLModifier((url: string) => {
             // If URL is relative (doesn't start with http:// or https://)
             if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:')) {
@@ -204,28 +241,66 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
             console.warn('⚠️ Failed to load resource:', url);
           };
           
-          // Track texture loading progress for GLTF
-          if (detectedFormat === 'gltf') {
-            loadingManager.onLoad = () => {
-              console.log('✅ All GLTF resources loaded successfully');
-            };
-            loadingManager.onProgress = (url: string, loaded: number, total: number) => {
-              if (url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg') || url.includes('.bin')) {
-                console.log(`📦 Loading GLTF resource ${loaded}/${total}: ${url.split('/').pop()}`);
-              }
-            };
-          }
+          // Track loading progress with percentage
+          loadingManager.onProgress = (url: string, loaded: number, total: number) => {
+            // Update total resources count
+            if (total > totalResources) {
+              totalResources = total;
+            }
+            loadedResources = loaded;
+            
+            // Calculate percentage
+            const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
+            setLoadingProgress(percentage);
+            
+            // Log progress for important resources
+            const resourceName = url.split('/').pop() || url;
+            if (url.includes('.bin') || url.includes('.png') || url.includes('.jpg') || url.includes('.jpeg') || url.includes('.gltf') || url.includes('.glb')) {
+              console.log(`📦 Loading: ${percentage}% (${loaded}/${total}) - ${resourceName}`);
+            }
+          };
+          
+          // Handle successful completion
+          loadingManager.onLoad = () => {
+            console.log('✅ All resources loaded successfully');
+            setLoadingProgress(100);
+          };
           
           const loader = new GLTFLoader(loadingManager);
           console.log(`🔄 Loading ${detectedFormat.toUpperCase()} model from:`, uri);
           
           if (detectedFormat === 'gltf') {
-            console.log('📝 GLTF format detected - external textures will be loaded from URLs');
+            console.log('📝 GLTF format detected - external resources (.bin, textures) will be loaded from URLs');
           } else {
             console.log('📦 GLB format detected - embedded textures may not work in Expo Go');
           }
           
-          const gltf = await loader.loadAsync(uri);
+          // Use callback-based load() instead of loadAsync() for better control
+          // This ensures we wait for all external resources to load
+          const gltf = await new Promise<any>((resolve, reject) => {
+            loader.load(
+              uri,
+              // onLoad callback - fires when ALL resources are loaded
+              (gltf: any) => {
+                console.log('✅ Model and all resources loaded successfully');
+                resolve(gltf);
+              },
+              // onProgress callback - fires during loading
+              (progress: any) => {
+                if (progress.total > 0) {
+                  const percentage = Math.round((progress.loaded / progress.total) * 100);
+                  setLoadingProgress(percentage);
+                  console.log(`📦 Loading: ${percentage}% (${progress.loaded}/${progress.total} bytes)`);
+                }
+              },
+              // onError callback - fires on error
+              (error: any) => {
+                console.error('❌ Failed to load model:', error);
+                reject(error);
+              }
+            );
+          });
+          
           model = gltf.scene;
           animations = gltf.animations || [];
           
@@ -293,10 +368,10 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
           // If we have MTL file URL, load materials first
           if (textureUrls.length > 0 && textureUrls[0].endsWith('.mtl')) {
             const mtlLoader = new MTLLoader();
-            const materials = await new Promise<THREE.MaterialCreator>((resolve, reject) => {
+            const materials = await new Promise<any>((resolve, reject) => {
               mtlLoader.load(
                 textureUrls[0],
-                (materials) => {
+                (materials: any) => {
                   materials.preload();
                   resolve(materials);
                 },
@@ -315,7 +390,7 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
           model = await new Promise<THREE.Group>((resolve, reject) => {
             objLoader.load(
               uri,
-              (object) => resolve(object),
+              (object: any) => resolve(object),
               undefined,
               reject
             );
@@ -358,7 +433,14 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
         }
       } catch (err: any) {
         console.error('❌ Failed to load 3D model:', err);
-        setError(err.message || 'Failed to load 3D model');
+        const errorMessage = err.message || 'Failed to load 3D model';
+        setError(errorMessage);
+        // Clear timeout and mark as complete
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        loadingCompleteRef.current = true;
         setLoading(false);
         restoreConsole();
         return;
@@ -452,7 +534,8 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
         console.log('ℹ️ No textures found in model - model will render with default materials');
       }
 
-      setLoading(false);
+      // Mark loading as complete
+      completeLoading(true);
 
       // Animation loop
       const animate = () => {
@@ -476,16 +559,40 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
       animate();
     } catch (err: any) {
       console.error('Error loading 3D model:', err);
-      setError(err.message || 'Failed to load 3D model');
+      const errorMessage = err.message || 'Failed to load 3D model';
+      setError(errorMessage);
+      // Clear timeout and mark as complete
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      loadingCompleteRef.current = true;
       setLoading(false);
+      // Restore console (defined in outer scope)
+      const originalWarn = console.warn;
+      const originalError = console.error;
+      const originalLog = console.log;
+      console.warn = originalWarn;
+      console.error = originalError;
+      console.log = originalLog;
     }
   };
+
+  // Update uriRef when uri changes to prevent stale closures
+  useEffect(() => {
+    uriRef.current = uri;
+  }, [uri]);
 
   useEffect(() => {
     return () => {
       // Cleanup animation frame
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+      }
+      // Cleanup timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, []);
@@ -521,7 +628,11 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading 3D model...</Text>
+          <Text style={styles.loadingText}>
+            {loadingProgress > 0 
+              ? `Loading 3D model... ${loadingProgress}%`
+              : 'Loading 3D model...'}
+          </Text>
         </View>
       )}
       <GLView
