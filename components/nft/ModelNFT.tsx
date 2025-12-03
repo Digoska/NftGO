@@ -182,17 +182,31 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
       setError(null);
       setLoadingProgress(0);
       
+      // Clear any existing timeout from previous model load
+      // This prevents old timeouts from firing and interrupting new model loads
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+        console.log('🧹 Cleared previous timeout before starting new load');
+      }
+      
       // Set up 60-second timeout to prevent infinite loading
       // Increased from 30s to accommodate larger files on mobile networks
       const TIMEOUT_MS = 60000; // 60 seconds
+      // Store current URI in closure to verify timeout is still valid
+      const currentUri = uri;
       timeoutRef.current = setTimeout(() => {
-        if (!loadingCompleteRef.current) {
-          console.error('⏱️ Model loading timeout after 60 seconds');
+        // Double-check: Only fire timeout if still loading this URI
+        // This prevents old timeouts from firing after navigation to a new model
+        if (!loadingCompleteRef.current && loadingUrlRef.current === currentUri) {
+          console.error('⏱️ Model loading timeout after 60 seconds for:', currentUri);
           setError('Network timeout: Model took too long to load. Please check your connection and try again.');
           setLoading(false);
           loadingCompleteRef.current = true;
           loadingUrlRef.current = null; // Clear loading guard on timeout
           restoreConsole();
+        } else {
+          console.log('⏭️ Timeout skipped - model already completed or URI changed');
         }
       }, TIMEOUT_MS);
       
