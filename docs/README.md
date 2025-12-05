@@ -63,6 +63,11 @@ SQL skripty a API príklady:
 - **[ADD_MY_NFT.sql](./api/ADD_MY_NFT.sql)** - SQL skript na pridanie NFT
 - **[CHECK_MY_NFT.sql](./api/CHECK_MY_NFT.sql)** - SQL skript na kontrolu NFT
 
+### 📅 [Daily Documentation](./)
+Denné záznamy zmien a implementácií:
+- **[2025-12-03-infinite-loading-fix.md](./2025-12-03-infinite-loading-fix.md)** ⭐ - Infinite Loading State Fix for GLTF Models
+- **[2025-12-03.md](./2025-12-03.md)** - GLTF External Texture Support Implementation (Expo Go fix)
+
 ---
 
 ## 🎯 Kde Začať?
@@ -90,4 +95,4 @@ SQL skripty a API príklady:
 
 ---
 
-**Posledná aktualizácia:** December 2024
+**Posledná aktualizácia:** December 3, 2025
