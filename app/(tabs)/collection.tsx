@@ -270,7 +270,6 @@ export default function CollectionScreen() {
                     ) : selectedNFT.media_type === 'model' ? (
                       <ModelNFT
                         uri={selectedNFT.image_url}
-                        modelFormat="glb"
                         style={styles.detailImage}
                       />
                     ) : (
