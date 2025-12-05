@@ -20,7 +20,7 @@ import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
 import VideoNFT from '../../components/nft/VideoNFT';
-import ModelNFT from '../../components/nft/ModelNFT';
+import WebViewModel from '../../components/nft/WebViewModel';
 import CachedImage from '../../components/nft/CachedImage';
 import { getOrCacheFile, preCacheFiles } from '../../lib/nftCache';
 
@@ -364,9 +364,8 @@ export default function WalletScreen() {
                           loop={true}
                         />
                       ) : selectedNFT.media_type === 'model' ? (
-                        <ModelNFT
+                        <WebViewModel
                           uri={selectedNFT.image_url}
-                          style={styles.detailImage}
                         />
                       ) : (
                         <CachedImage
@@ -514,9 +513,8 @@ function NFTCard({
                 loop={true}
               />
             ) : nft.media_type === 'model' ? (
-              <ModelNFT
+              <WebViewModel
                 uri={nft.image_url}
-                style={styles.nftImage}
               />
             ) : (
               <CachedImage

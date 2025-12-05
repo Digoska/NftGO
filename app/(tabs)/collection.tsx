@@ -17,7 +17,7 @@ import { UserNFT, NFT } from '../../types';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
-import ModelNFT from '../../components/nft/ModelNFT';
+import WebViewModel from '../../components/nft/WebViewModel';
 
 export default function CollectionScreen() {
   const { user } = useAuth();
@@ -205,9 +205,8 @@ export default function CollectionScreen() {
                             loop={true}
                           />
                         ) : nft.media_type === 'model' ? (
-                          <ModelNFT
+                          <WebViewModel
                             uri={nft.image_url}
-                            style={styles.nftImage}
                           />
                         ) : (
                           <Image
@@ -268,9 +267,8 @@ export default function CollectionScreen() {
                         loop={true}
                       />
                     ) : selectedNFT.media_type === 'model' ? (
-                      <ModelNFT
+                      <WebViewModel
                         uri={selectedNFT.image_url}
-                        style={styles.detailImage}
                       />
                     ) : (
                       <Image
