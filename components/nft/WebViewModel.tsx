@@ -56,7 +56,7 @@ export default function WebViewModel({ uri, poster, autoRotate = true }: WebView
       <WebView
         originWhitelist={['*']}
         source={{ html: htmlContent }}
-        style={[styles.webview, { opacity: loading ? 0 : 1 }]}
+        style={styles.webview}
         onLoadEnd={() => setLoading(false)}
         javaScriptEnabled={true}
         domStorageEnabled={true}

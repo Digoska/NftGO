@@ -205,9 +205,11 @@ export default function CollectionScreen() {
                             loop={true}
                           />
                         ) : nft.media_type === 'model' ? (
-                          <WebViewModel
-                            uri={nft.image_url}
-                          />
+                          <View style={{ height: 150, width: '100%' }}>
+                            <WebViewModel
+                              uri={nft.image_url}
+                            />
+                          </View>
                         ) : (
                           <Image
                             source={{ uri: nft.image_url }}
@@ -267,9 +269,11 @@ export default function CollectionScreen() {
                         loop={true}
                       />
                     ) : selectedNFT.media_type === 'model' ? (
-                      <WebViewModel
-                        uri={selectedNFT.image_url}
-                      />
+                      <View style={{ height: 300, width: '100%' }}>
+                        <WebViewModel
+                          uri={selectedNFT.image_url}
+                        />
+                      </View>
                     ) : (
                       <Image
                         source={{ uri: selectedNFT.image_url }}
