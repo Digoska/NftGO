@@ -306,12 +306,8 @@ export default function HomeScreen() {
               {userProfile?.avatar_url ? (
                 <Image source={{ uri: userProfile.avatar_url }} style={styles.avatar} />
               ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarText}>
-                    {userProfile?.full_name?.[0]?.toUpperCase() ||
-                      user?.email?.[0]?.toUpperCase() ||
-                      'U'}
-                  </Text>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: '#E5E7EB' }]}>
+                  <Ionicons name="person" size={40} color="#9CA3AF" />
                 </View>
               )}
               {stats && stats.level > 0 && (
@@ -341,8 +337,9 @@ export default function HomeScreen() {
             <ProgressBar
               current={currentLevelXP}
               total={xpForNextLevel}
-              height={12}
+              height={8}
               showLabel={true}
+              backgroundColor="#F3F4F6"
             />
             <Text style={styles.nextLevelText}>
               {xpForNextLevel - currentLevelXP} XP to Level {stats.level + 1}
@@ -365,7 +362,7 @@ export default function HomeScreen() {
               value={stats?.daily_streak || 0}
               label="Day Streak"
               iconColor={colors.warning}
-              backgroundColor={colors.warning + '15'}
+              backgroundColor="#FFF7ED"
               onPress={() =>
                 setSelectedStat({
                   icon: 'flame',
@@ -373,7 +370,7 @@ export default function HomeScreen() {
                   value: stats?.daily_streak || 0,
                   description: 'Consecutive days of collecting NFTs',
                   iconColor: colors.warning,
-                  backgroundColor: colors.warning + '15',
+                  backgroundColor: '#FFF7ED',
                   additionalInfo: [
                     { label: 'Last Collection', value: stats?.last_collection_date || 'Never' },
                   ],
@@ -385,7 +382,7 @@ export default function HomeScreen() {
               value={stats?.total_distance_km ? `${stats.total_distance_km.toFixed(1)} km` : '0 km'}
               label="Distance"
               iconColor={colors.primary}
-              backgroundColor={colors.primary + '15'}
+              backgroundColor="#F3E8FF"
               onPress={() =>
                 setSelectedStat({
                   icon: 'map',
@@ -393,7 +390,7 @@ export default function HomeScreen() {
                   value: stats?.total_distance_km ? `${stats.total_distance_km.toFixed(1)} km` : '0 km',
                   description: 'Total distance traveled while collecting NFTs',
                   iconColor: colors.primary,
-                  backgroundColor: colors.primary + '15',
+                  backgroundColor: '#F3E8FF',
                 })
               }
             />

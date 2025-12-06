@@ -142,12 +142,8 @@ export default function ProfileScreen() {
                   style={styles.avatar}
                 />
               ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarText}>
-                    {userProfile?.full_name?.[0]?.toUpperCase() ||
-                      user?.email?.[0]?.toUpperCase() ||
-                      'U'}
-                  </Text>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: '#E5E7EB', borderColor: '#E5E7EB' }]}>
+                  <Ionicons name="person" size={50} color="#9CA3AF" />
                 </View>
               )}
               <View style={styles.levelBadge}>
