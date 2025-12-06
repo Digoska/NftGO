@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
+// @ts-ignore
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Crypto from 'expo-crypto';
 
 interface WebViewModelProps {
   uri: string;
@@ -10,8 +13,67 @@ interface WebViewModelProps {
 
 export default function WebViewModel({ uri, poster, autoRotate = true }: WebViewModelProps) {
   const [loading, setLoading] = useState(true);
+  const [modelSrc, setModelSrc] = useState<string | null>(null);
+  const [statusText, setStatusText] = useState('Initializing...');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadModel = async () => {
+      try {
+        if (!uri) return;
+
+        // Create a unique filename based on the URI
+        const hash = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          uri
+        );
+        const modelsDir = `${FileSystem.documentDirectory}models/`;
+        const fileUri = `${modelsDir}${hash}.glb`;
+
+        // Ensure directory exists
+        const dirInfo = await FileSystem.getInfoAsync(modelsDir);
+        if (!dirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(modelsDir, { intermediates: true });
+        }
+
+        // Check if file exists
+        const fileInfo = await FileSystem.getInfoAsync(fileUri);
+        
+        if (fileInfo.exists) {
+          if (isMounted) setStatusText('Loading from cache...');
+          // Read cached file
+          const base64 = await FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          if (isMounted) setModelSrc(`data:model/gltf-binary;base64,${base64}`);
+        } else {
+          if (isMounted) setStatusText('Downloading model...');
+          // Download file
+          await FileSystem.downloadAsync(uri, fileUri);
+          
+          if (isMounted) setStatusText('Processing...');
+          // Read downloaded file
+          const base64 = await FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          if (isMounted) setModelSrc(`data:model/gltf-binary;base64,${base64}`);
+        }
+      } catch (error) {
+        // Fallback to online URI if caching fails
+        if (isMounted) setModelSrc(uri);
+      }
+    };
+
+    loadModel();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [uri]);
 
   // Google <model-viewer> HTML content
+  // Note: camera-controls removed and pointer-events: none added to disable interaction
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -25,13 +87,13 @@ export default function WebViewModel({ uri, poster, autoRotate = true }: WebView
             height: 100vh;
             background-color: transparent;
             --poster-color: transparent;
+            pointer-events: none; /* Disable user interaction */
           }
         </style>
       </head>
       <body>
         <model-viewer
-          src="${uri}"
-          camera-controls
+          src="${modelSrc || ''}"
           auto-rotate="${autoRotate}"
           autoplay
           shadow-intensity="1"
@@ -49,22 +111,24 @@ export default function WebViewModel({ uri, poster, autoRotate = true }: WebView
       {loading && (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color="#6C5CE7" />
-          <Text style={styles.loadingText}>Loading 3D Model...</Text>
+          <Text style={styles.loadingText}>{statusText}</Text>
         </View>
       )}
 
-      <WebView
-        originWhitelist={['*']}
-        source={{ html: htmlContent }}
-        style={styles.webview}
-        onLoadEnd={() => setLoading(false)}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        startInLoadingState={false}
-        scalesPageToFit={true}
-        scrollEnabled={false}
-        androidLayerType="hardware"
-      />
+      {modelSrc && (
+        <WebView
+          originWhitelist={['*']}
+          source={{ html: htmlContent }}
+          style={[styles.webview, { opacity: loading ? 0 : 1 }]}
+          onLoadEnd={() => setLoading(false)}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={false}
+          scalesPageToFit={true}
+          scrollEnabled={false}
+          androidLayerType="hardware"
+        />
+      )}
     </View>
   );
 }
@@ -94,4 +158,3 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
   }
 });
-
