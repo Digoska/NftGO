@@ -229,6 +229,10 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
       
       try {
         if (detectedFormat === 'gltf' || detectedFormat === 'glb') {
+          // Extract base URL (directory containing the .gltf file)
+          const baseUrl = uri.substring(0, uri.lastIndexOf('/') + 1);
+          console.log('📁 Base URL for resources:', baseUrl);
+          
           // GLTF/GLB loader with custom LoadingManager
           const loadingManager = new THREE.LoadingManager();
           
@@ -236,18 +240,21 @@ export default function ModelNFT({ uri, style, modelFormat, textureUrls = [] }: 
           let totalResources = 1; // Start with 1 for the main file
           let loadedResources = 0;
           
-          // Resolve relative paths for GLTF external textures
+          // Set URL modifier to convert relative paths to absolute URLs
+          // This is critical for GLTF files with external .bin and texture files
           loadingManager.setURLModifier((url: string) => {
-            // If URL is relative (doesn't start with http:// or https://)
-            if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:')) {
-              // Resolve relative path based on GLTF file's directory
-              const gltfUrl = new URL(uri);
-              const basePath = gltfUrl.pathname.substring(0, gltfUrl.pathname.lastIndexOf('/') + 1);
-              const resolvedUrl = new URL(url, gltfUrl.origin + basePath);
-              console.log(`🔗 Resolved relative path: ${url} → ${resolvedUrl.href}`);
-              return resolvedUrl.href;
+            console.log('🔗 Resolving URL:', url);
+            
+            // If already absolute (starts with http/https), use as-is
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              console.log('✅ Already absolute');
+              return url;
             }
-            return url;
+            
+            // If relative, prepend base URL
+            const absoluteUrl = baseUrl + url;
+            console.log('🔄 Resolved to:', absoluteUrl);
+            return absoluteUrl;
           });
           
           // Handle loading errors with better logging
