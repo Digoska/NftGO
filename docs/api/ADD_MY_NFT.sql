@@ -3,14 +3,13 @@
 -- ============================================
 -- Nahraď hodnoty nižšie a spusti v Supabase SQL Editor
 
--- KROK 1: Zisti svoj User ID (spusti tento SELECT a skopíruj id)
--- Nahraď 'tvoj-email@example.com' svojím emailom
+-- KROK 1: Zisti svoj User ID (Already known)
+-- User: nikodem.zelenak.privat@gmail.com
+-- User ID: 908149f0-85fe-4351-893f-464e3dc5d863
 SELECT 
-  id as user_id,
-  email,
-  '👆 Skopíruj tento user_id' as instruction
-FROM auth.users 
-WHERE email = 'tvoj-email@example.com';
+  '908149f0-85fe-4351-893f-464e3dc5d863' as user_id,
+  'nikodem.zelenak.privat@gmail.com' as email,
+  '✅ Your User ID' as status;
 
 -- KROK 2: Zisti ID tvojho NFT (spusti tento SELECT a skopíruj id)
 -- Nahraď 'Názov tvojho NFT' názvom tvojho NFT
@@ -26,17 +25,18 @@ ORDER BY created_at DESC
 LIMIT 1;
 
 -- KROK 3: Pridaj NFT do tvojho účtu
--- Nahraď 'YOUR_USER_ID' a 'YOUR_NFT_ID' hodnotami z krokov 1 a 2
+-- Using your User ID: 908149f0-85fe-4351-893f-464e3dc5d863
+-- Replace 'YOUR_NFT_ID' with the NFT ID from Step 2
 INSERT INTO user_nfts (user_id, nft_id, collected_at)
 VALUES (
-  'YOUR_USER_ID'::UUID,  -- 👈 Nahraď hodnotou z KROKU 1
-  'YOUR_NFT_ID'::UUID,   -- 👈 Nahraď hodnotou z KROKU 2
+  '908149f0-85fe-4351-893f-464e3dc5d863'::UUID,  -- ✅ Your User ID
+  'YOUR_NFT_ID'::UUID,   -- 👈 Replace with NFT ID from Step 2
   NOW()
 )
 ON CONFLICT (user_id, nft_id, spawn_id) DO NOTHING;  -- Ak už existuje, nerob nič
 
 -- KROK 4: Skontroluj že to funguje
--- Nahraď 'YOUR_USER_ID' hodnotou z KROKU 1
+-- Using your User ID: 908149f0-85fe-4351-893f-464e3dc5d863
 SELECT 
   un.id as user_nft_id,
   un.collected_at,
@@ -48,7 +48,7 @@ SELECT
   '✅ Toto je tvoje NFT!' as status
 FROM user_nfts un
 JOIN nfts n ON n.id = un.nft_id
-WHERE un.user_id = 'YOUR_USER_ID'::UUID  -- 👈 Nahraď hodnotou z KROKU 1
+WHERE un.user_id = '908149f0-85fe-4351-893f-464e3dc5d863'::UUID  -- ✅ Your User ID
 ORDER BY un.collected_at DESC;
 
 -- ============================================
