@@ -364,9 +364,11 @@ export default function WalletScreen() {
                           loop={true}
                         />
                       ) : selectedNFT.media_type === 'model' ? (
-                        <WebViewModel
-                          uri={selectedNFT.image_url}
-                        />
+                        <View style={{ height: 300, width: '100%' }}>
+                          <WebViewModel
+                            uri={selectedNFT.image_url}
+                          />
+                        </View>
                       ) : (
                         <CachedImage
                           uri={selectedNFT.image_url}
@@ -513,9 +515,11 @@ function NFTCard({
                 loop={true}
               />
             ) : nft.media_type === 'model' ? (
-              <WebViewModel
-                uri={nft.image_url}
-              />
+              <View style={{ height: 160, width: '100%' }}>
+                <WebViewModel
+                  uri={nft.image_url}
+                />
+              </View>
             ) : (
               <CachedImage
                 uri={nft.image_url}

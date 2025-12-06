@@ -85,9 +85,11 @@ export default function RecentActivity({
                     loop={true}
                   />
                 ) : nft.media_type === 'model' ? (
-                  <WebViewModel
-                    uri={nft.image_url}
-                  />
+                  <View style={{ height: 100, width: '100%' }}>
+                    <WebViewModel
+                      uri={nft.image_url}
+                    />
+                  </View>
                 ) : (
                   <Image source={{ uri: nft.image_url }} style={styles.image} resizeMode="cover" />
                 )
