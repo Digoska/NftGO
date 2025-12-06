@@ -197,6 +197,16 @@ nft-go/
   - Animácie podporované
   - Native renderer (`expo-three` + `expo-gl`)
 
+## 3D Model Format Requirements
+
+- **Format:** GLB (GLTF Binary)
+
+- **Reason:** GLTF with external resources (.bin, textures) are not supported in Expo Go.
+
+- **Limitation:** Textures may not display (models appear gray) but geometry and animations work.
+
+- **Future:** A development build may support full texture rendering.
+
 - **Gamifikácia**
   - Leveling systém (experience points)
   - Daily streaks

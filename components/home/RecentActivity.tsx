@@ -6,7 +6,7 @@ import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
 import VideoNFT from '../nft/VideoNFT';
-import ModelNFT from '../nft/ModelNFT';
+import WebViewModel from '../nft/WebViewModel';
 
 interface RecentActivityProps {
   recentNFTs: UserNFT[];
@@ -85,10 +85,11 @@ export default function RecentActivity({
                     loop={true}
                   />
                 ) : nft.media_type === 'model' ? (
-                  <ModelNFT
-                    uri={nft.image_url}
-                    style={styles.image}
-                  />
+                  <View style={{ height: 100, width: '100%' }}>
+                    <WebViewModel
+                      uri={nft.image_url}
+                    />
+                  </View>
                 ) : (
                   <Image source={{ uri: nft.image_url }} style={styles.image} resizeMode="cover" />
                 )
