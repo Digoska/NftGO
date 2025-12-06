@@ -40,3 +40,33 @@ import WebViewModel from '@/components/nft/WebViewModel';
 
 ---
 
+## 🚀 Performance & Caching System (Implemented Dec 6, 2025)
+
+### Offline Caching Architecture
+
+The `WebViewModel` component now implements a "Download Once, Read Forever" strategy:
+
+1. **Check:** Has this URL been downloaded to `FileSystem.documentDirectory`?
+
+2. **Download:** If No, download using `FileSystem.downloadAsync`.
+
+3. **Serve:** Read the file as a **Base64 String** and inject it into the WebView using a Data URI (`data:model/gltf-binary;base64...`).
+
+   - *Why Base64?* Android WebViews in Expo Go restrict direct `file://` access. Base64 bypasses this security restriction reliably.
+
+### User Interaction Constraints
+
+To improve performance and keep the UI consistent:
+
+- **Interaction Locked:** Users cannot manually rotate/zoom/pan.
+
+- **Implementation:** `pointer-events: none` CSS + removed `camera-controls`.
+
+- **Auto-Rotate:** Always enabled for dynamic presentation.
+
+### Requirements for New Models
+
+- **File Size:** Strict **<10MB** limit (Target <5MB). Large Base64 strings will crash the JS bridge.
+
+---
+
