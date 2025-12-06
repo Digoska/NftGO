@@ -24,7 +24,7 @@ import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
 
 export default function EditProfileScreen() {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, refreshUserProfile } = useAuth();
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [xUsername, setXUsername] = useState('');
@@ -84,14 +84,17 @@ export default function EditProfileScreen() {
           .eq('username', usernameValue.trim().toLowerCase())
           .single();
 
-        if (data) {
+        // If data exists and it's NOT the current user, username is taken
+        if (data && data.id !== user?.id) {
           setUsernameError('Username is already taken');
           return false;
         }
       } catch (error: any) {
-        // Username not found is good
+        // Username not found (PGRST116) is good - means username is available
         if (error.code !== 'PGRST116') {
           console.error('Error checking username:', error);
+          // If error is not "not found", it might be a real issue
+          // But we'll let the update attempt happen and catch it there
         }
       }
     }
@@ -263,10 +266,29 @@ export default function EditProfileScreen() {
 
       if (updateError) {
         console.error('Error updating profile:', updateError);
-        Alert.alert('Error', updateError.message || 'Failed to save profile');
+        
+        // Handle specific error cases
+        let errorMessage = 'Failed to save profile';
+        
+        if (updateError.code === '23505') {
+          // Unique constraint violation (duplicate username)
+          if (updateError.message.includes('username')) {
+            errorMessage = 'This username is already taken. Please choose a different one.';
+            setUsernameError('Username is already taken');
+          } else {
+            errorMessage = 'This value already exists. Please choose a different one.';
+          }
+        } else {
+          errorMessage = updateError.message || errorMessage;
+        }
+        
+        Alert.alert('Error', errorMessage);
         setLoading(false);
         return;
       }
+
+      // Refresh user profile in auth context
+      await refreshUserProfile();
 
       Alert.alert('Success', 'Profile updated successfully', [
         {

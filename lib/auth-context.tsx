@@ -17,7 +17,8 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<{ error: any }>;
-      signInWithApple: (identityToken: string, nonce?: string) => Promise<{ error: any }>;
+  signInWithApple: (identityToken: string, nonce?: string) => Promise<{ error: any }>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -312,6 +313,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUserProfile = async () => {
+    if (user?.id) {
+      await fetchUserProfile(user.id);
+    }
+  };
+
   const value = {
     session,
     user,
@@ -322,6 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     signInWithGoogle,
     signInWithApple,
+    refreshUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

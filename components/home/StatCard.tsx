@@ -30,9 +30,9 @@ export default function StatCard({
         <Ionicons name={icon} size={24} color={iconColor} />
       </View>
       <View style={styles.content}>
-        <Text style={styles.value}>{value}</Text>
-        <Text style={styles.label}>{label}</Text>
-        {secondaryValue && <Text style={styles.secondaryValue}>{secondaryValue}</Text>}
+        <Text style={styles.value} numberOfLines={1} ellipsizeMode="tail">{value}</Text>
+        <Text style={styles.label} numberOfLines={1}>{label}</Text>
+        {secondaryValue && <Text style={styles.secondaryValue} numberOfLines={1}>{secondaryValue}</Text>}
       </View>
     </View>
   );
@@ -64,6 +64,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     borderWidth: 1,
     borderColor: '#F3F4F6', // Very light border
+    minWidth: 160,
   },
   iconContainer: {
     width: 48,
@@ -75,11 +76,13 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    minWidth: 0, // Allows text to shrink
   },
   value: {
     ...typography.h2,
     color: colors.text,
     marginBottom: spacing.xs,
+    flexShrink: 1,
   },
   label: {
     ...typography.caption,

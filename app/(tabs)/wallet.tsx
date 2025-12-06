@@ -265,15 +265,21 @@ export default function WalletScreen() {
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
       >
-        {(['all', 'common', 'rare', 'epic', 'legendary'] as const).map((rarity) => (
-          <FilterButton
-            key={rarity}
-            rarity={rarity}
-            isActive={filter === rarity}
-            onPress={() => setFilter(rarity)}
-            getRarityLabel={getRarityLabel}
-          />
-        ))}
+        {(['all', 'common', 'rare', 'epic', 'legendary'] as const).map((rarity, index) => {
+          const isFirst = index === 0;
+          const isLast = index === (['all', 'common', 'rare', 'epic', 'legendary'] as const).length - 1;
+          return (
+            <FilterButton
+              key={rarity}
+              rarity={rarity}
+              isActive={filter === rarity}
+              onPress={() => setFilter(rarity)}
+              getRarityLabel={getRarityLabel}
+              isFirst={isFirst}
+              isLast={isLast}
+            />
+          );
+        })}
       </ScrollView>
     </>
   );
@@ -428,11 +434,15 @@ function FilterButton({
   isActive,
   onPress,
   getRarityLabel,
+  isFirst = false,
+  isLast = false,
 }: {
   rarity: 'all' | 'common' | 'rare' | 'epic' | 'legendary';
   isActive: boolean;
   onPress: () => void;
   getRarityLabel: (rarity: string) => string;
+  isFirst?: boolean;
+  isLast?: boolean;
 }) {
   const scaleAnim = useRef(new Animated.Value(isActive ? 1.05 : 1)).current;
 
@@ -451,6 +461,8 @@ function FilterButton({
         style={[
           styles.filterButton,
           isActive && styles.filterButtonActive,
+          isFirst && styles.filterButtonFirst,
+          isLast && styles.filterButtonLast,
         ]}
         onPress={onPress}
         activeOpacity={0.7}
@@ -636,7 +648,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg + spacing.xs,
     paddingBottom: spacing.md,
   },
   title: {
@@ -657,6 +669,7 @@ const styles = StyleSheet.create({
   statsContent: {
     paddingLeft: spacing.lg,
     paddingRight: spacing.lg,
+    paddingVertical: spacing.xs,
   },
   statCard: {
     width: 100,
@@ -686,12 +699,13 @@ const styles = StyleSheet.create({
   },
   // Filter Buttons
   filterContainer: {
-    maxHeight: 50,
     marginBottom: spacing.lg,
   },
   filterContent: {
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
   filterButton: {
     paddingHorizontal: spacing.lg,
@@ -712,6 +726,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
+  },
+  filterButtonFirst: {
+    marginLeft: spacing.lg,
+  },
+  filterButtonLast: {
+    marginRight: spacing.lg,
   },
   filterText: {
     ...typography.caption,

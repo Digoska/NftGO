@@ -8,16 +8,15 @@
 -- 4. Run each section in order
 
 -- ============================================
--- STEP 1: Get Your User ID
+-- STEP 1: Get Your User ID (Already known)
 -- ============================================
--- Replace 'your-email@example.com' with your actual email
+-- User: nikodem.zelenak.privat@gmail.com
+-- User ID: 908149f0-85fe-4351-893f-464e3dc5d863
 SELECT 
-  id as user_id,
-  email,
-  username,
-  '👆 Copy this user_id for Step 3' as instruction
-FROM users 
-WHERE email = 'your-email@example.com';
+  '908149f0-85fe-4351-893f-464e3dc5d863' as user_id,
+  'nikodem.zelenak.privat@gmail.com' as email,
+  (SELECT username FROM users WHERE id = '908149f0-85fe-4351-893f-464e3dc5d863') as username,
+  '✅ Your User ID' as status;
 
 -- ============================================
 -- STEP 2: Add 3D Model NFT to Database
@@ -46,15 +45,16 @@ INSERT INTO nfts (
 -- ============================================
 -- STEP 3: Add NFT to Your Account
 -- ============================================
--- Replace YOUR_USER_ID and YOUR_NFT_ID with values from Steps 1 and 2
+-- Using your User ID: 908149f0-85fe-4351-893f-464e3dc5d863
+-- Replace YOUR_NFT_ID with NFT ID from Step 2
 INSERT INTO user_nfts (
   user_id,
   nft_id,
   spawn_id,
   collected_at
 ) VALUES (
-  'YOUR_USER_ID',    -- 👈 Replace: User ID from Step 1
-  'YOUR_NFT_ID',     -- 👈 Replace: NFT ID from Step 2
+  '908149f0-85fe-4351-893f-464e3dc5d863'::UUID,    -- ✅ Your User ID
+  'YOUR_NFT_ID'::UUID,     -- 👈 Replace: NFT ID from Step 2
   NULL,               -- ✅ Keep: NULL is fine
   NOW()               -- ✅ Keep: Current timestamp
 ) 
@@ -64,7 +64,7 @@ RETURNING id, '✅ Success! NFT added to your account' as status;
 -- ============================================
 -- STEP 4: Verify (Optional)
 -- ============================================
--- Replace YOUR_USER_ID with your User ID from Step 1
+-- Using your User ID: 908149f0-85fe-4351-893f-464e3dc5d863
 SELECT 
   un.id as user_nft_id,
   un.collected_at,
@@ -76,7 +76,7 @@ SELECT
   '✅ This is your NFT!' as status
 FROM user_nfts un
 JOIN nfts n ON n.id = un.nft_id
-WHERE un.user_id = 'YOUR_USER_ID'  -- 👈 Replace: Your User ID
+WHERE un.user_id = '908149f0-85fe-4351-893f-464e3dc5d863'::UUID  -- ✅ Your User ID
   AND n.media_type = 'model'
 ORDER BY un.collected_at DESC
 LIMIT 10;

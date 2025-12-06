@@ -2,11 +2,13 @@
 -- SQL Script: Pridanie GLTF NFT na účet
 -- ============================================
 
--- KROK 1: Získaj svoj User ID
--- Spusti tento SELECT a skopíruj id
-SELECT id, email, username 
-FROM users 
-WHERE email = 'nikodem.zelenak.privat@gmail.com';
+-- KROK 1: Získaj svoj User ID (Already known)
+-- User: nikodem.zelenak.privat@gmail.com
+-- User ID: 908149f0-85fe-4351-893f-464e3dc5d863
+SELECT 
+  '908149f0-85fe-4351-893f-464e3dc5d863' as id, 
+  'nikodem.zelenak.privat@gmail.com' as email,
+  (SELECT username FROM users WHERE id = '908149f0-85fe-4351-893f-464e3dc5d863') as username;
 
 -- KROK 2: Vlož nový NFT záznam
 -- Nahraď URL svojím public URL z Supabase Storage
@@ -39,8 +41,8 @@ INSERT INTO user_nfts (
   spawn_id,
   collected_at
 ) VALUES (
-  '908149f0-85fe-4351-893f-464e3dc5d863',  -- Tvoj user_id (z KROKU 1)
-  'NFT_ID_HERE',                             -- NFT ID (z KROKU 2)
+  '908149f0-85fe-4351-893f-464e3dc5d863'::UUID,  -- ✅ Your User ID
+  'NFT_ID_HERE'::UUID,                             -- 👈 Replace with NFT ID from Step 2
   NULL,
   NOW()
 ) RETURNING id;
@@ -56,7 +58,7 @@ SELECT
   n.rarity
 FROM user_nfts un
 JOIN nfts n ON n.id = un.nft_id
-WHERE un.user_id = '908149f0-85fe-4351-893f-464e3dc5d863'
+WHERE un.user_id = '908149f0-85fe-4351-893f-464e3dc5d863'::UUID  -- ✅ Your User ID
 ORDER BY un.collected_at DESC;
 
 

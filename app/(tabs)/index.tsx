@@ -68,12 +68,12 @@ export default function HomeScreen() {
       setLeaderboard([]);
       setUpdates([]);
 
-      // Fetch all data
+      // Fetch stats first, then leaderboard (so rank can be calculated)
+      await fetchStats();
       await Promise.all([
-        fetchStats(),
         fetchRecentNFTs(),
         fetchUserProfile(),
-        fetchLeaderboard(),
+        fetchLeaderboard(), // This will update stats with rank
         fetchUpdates(),
       ]);
     } finally {
@@ -103,13 +103,28 @@ export default function HomeScreen() {
   const fetchLeaderboard = async () => {
     try {
       const { data, error } = await supabase.rpc('get_leaderboard', {
-        limit_count: 5,
+        limit_count: 100, // Get more to find user's rank
       });
 
       if (error) {
         console.error('Error fetching leaderboard:', error);
       } else if (data) {
-        setLeaderboard(data as LeaderboardUser[]);
+        const leaderboardData = data as LeaderboardUser[];
+        // Show top 5 for display
+        setLeaderboard(leaderboardData.slice(0, 5));
+        // Update user's rank in stats if found
+        if (user?.id && leaderboardData.length > 0) {
+          const userRank = leaderboardData.findIndex((u: LeaderboardUser) => u.user_id === user.id) + 1;
+          if (userRank > 0) {
+            // Update stats with rank using functional update to ensure we have latest stats
+            setStats((prevStats) => {
+              if (prevStats) {
+                return { ...prevStats, rank: userRank };
+              }
+              return prevStats;
+            });
+          }
+        }
       }
     } catch (error) {
       console.error('Error in fetchLeaderboard:', error);
@@ -418,25 +433,29 @@ export default function HomeScreen() {
             />
             <StatCard
               icon="trophy"
-              value={stats?.rank ? `#${stats.rank}` : '—'}
+              value={stats?.rank && stats.rank > 0 ? `#${stats.rank}` : '—'}
               label="Rank"
               iconColor={colors.warning}
               backgroundColor={colors.warning + '15'}
-              onPress={() =>
-                setSelectedStat({
-                  icon: 'trophy',
-                  label: 'Leaderboard Rank',
-                  value: stats?.rank ? `#${stats.rank}` : 'Unranked',
-                  description: 'Your position on the global leaderboard',
-                  iconColor: colors.warning,
-                  backgroundColor: colors.warning + '15',
-                  additionalInfo: [
-                    { label: 'Total NFTs', value: stats?.total_nfts || 0 },
-                    { label: 'Level', value: stats?.level || 1 },
-                    { label: 'Experience', value: stats?.experience || 0 },
-                  ],
-                })
-              }
+              onPress={() => {
+                // Fetch current rank from leaderboard
+                fetchLeaderboard().then(() => {
+                  const userRank = stats?.rank || (leaderboard.findIndex(u => u.user_id === user?.id) + 1);
+                  setSelectedStat({
+                    icon: 'trophy',
+                    label: 'Leaderboard Rank',
+                    value: userRank > 0 ? `#${userRank}` : 'Unranked',
+                    description: 'Your position on the global leaderboard',
+                    iconColor: colors.warning,
+                    backgroundColor: colors.warning + '15',
+                    additionalInfo: [
+                      { label: 'Total NFTs', value: stats?.total_nfts || 0 },
+                      { label: 'Level', value: stats?.level || 1 },
+                      { label: 'Experience', value: stats?.experience || 0 },
+                    ],
+                  });
+                });
+              }}
             />
             <StatCard
               icon="wallet"
@@ -493,6 +512,7 @@ export default function HomeScreen() {
               style={[
                 styles.rarityCardCompact,
                 { backgroundColor: colors.textMuted + '15', borderColor: colors.textMuted },
+                styles.rarityCardFirst,
               ]}
               onPress={() => router.push('/(tabs)/wallet')}
             >
@@ -526,6 +546,7 @@ export default function HomeScreen() {
               style={[
                 styles.rarityCardCompact,
                 { backgroundColor: colors.warning + '15', borderColor: colors.warning },
+                styles.rarityCardLast,
               ]}
               onPress={() => router.push('/(tabs)/wallet')}
             >
@@ -730,6 +751,7 @@ const styles = StyleSheet.create({
   statsScrollContent: {
     paddingLeft: spacing.lg,
     paddingRight: spacing.lg,
+    paddingVertical: spacing.xs,
   },
   raritySection: {
     marginBottom: spacing.xl,
@@ -741,18 +763,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   rarityScrollContent: {
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingVertical: spacing.xs,
   },
   rarityCardCompact: {
     minWidth: 100,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
     borderWidth: 2,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  rarityCardFirst: {
+    marginLeft: spacing.lg,
+  },
+  rarityCardLast: {
+    marginRight: spacing.lg,
   },
   rarityValueCompact: {
     ...typography.bodyBold,
