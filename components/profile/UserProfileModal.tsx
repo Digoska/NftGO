@@ -331,11 +331,11 @@ export default function UserProfileModal({
                       <View
                         style={[
                           styles.rarityCard,
-                          { backgroundColor: colors.primary + '20' },
+                          { backgroundColor: colors.rareLight },
                         ]}
                       >
                         <Text
-                          style={[styles.rarityValue, { color: colors.primary }]}
+                          style={[styles.rarityValue, { color: colors.rare }]}
                         >
                           {stats.rare_count}
                         </Text>

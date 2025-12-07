@@ -12,27 +12,66 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
-import {
-  getNotificationPreferences,
-  saveNotificationPreferences,
-  requestNotificationPermissions,
-  NotificationPreferences,
-} from '../../lib/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
 import Button from '../../components/common/Button';
 
+// Local definition to avoid importing lib/notifications.ts which causes side effects in Expo Go
+const NOTIFICATION_PREFERENCES_KEY = '@nftgo:notification_preferences';
+
+interface NotificationPreferences {
+  enabled: boolean;
+  nftCollected: boolean;
+  levelUp: boolean;
+  streakReminder: boolean;
+  newUpdates: boolean;
+  leaderboardChanges: boolean;
+}
+
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  enabled: true,
+  nftCollected: true,
+  levelUp: true,
+  streakReminder: true,
+  newUpdates: true,
+  leaderboardChanges: false,
+};
+
+// Local implementation of getNotificationPreferences
+const getNotificationPreferences = async (): Promise<NotificationPreferences> => {
+  try {
+    const stored = await AsyncStorage.getItem(NOTIFICATION_PREFERENCES_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    return DEFAULT_PREFERENCES;
+  } catch (error) {
+    console.error('Error getting notification preferences:', error);
+    return DEFAULT_PREFERENCES;
+  }
+};
+
+// Local implementation of saveNotificationPreferences
+const saveNotificationPreferences = async (
+  preferences: NotificationPreferences
+): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(
+      NOTIFICATION_PREFERENCES_KEY,
+      JSON.stringify(preferences)
+    );
+  } catch (error) {
+    console.error('Error saving notification preferences:', error);
+    throw error;
+  }
+};
+
 export default function SettingsScreen() {
   const { user } = useAuth();
-  const [preferences, setPreferences] = useState<NotificationPreferences>({
-    enabled: true,
-    nftCollected: true,
-    levelUp: true,
-    streakReminder: true,
-    newUpdates: true,
-    leaderboardChanges: false,
-  });
+  const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -54,7 +93,23 @@ export default function SettingsScreen() {
   const handleToggle = async (key: keyof NotificationPreferences, value: boolean) => {
     // If enabling notifications, request permissions first
     if (key === 'enabled' && value) {
-      const hasPermission = await requestNotificationPermissions();
+      let hasPermission = false;
+      
+      // Check if we are in Expo Go
+      if (Constants.appOwnership === 'expo') {
+        console.log('Skipping notification permission request in Expo Go');
+        hasPermission = true; // Assume true to allow toggling in dev
+      } else {
+        try {
+          // Dynamically import to avoid top-level side effects
+          const { requestNotificationPermissions } = require('../../lib/notifications');
+          hasPermission = await requestNotificationPermissions();
+        } catch (error) {
+          console.error('Error requesting permissions:', error);
+          hasPermission = false;
+        }
+      }
+
       if (!hasPermission) {
         Alert.alert(
           'Permission Required',
@@ -356,4 +411,3 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
 });
-
