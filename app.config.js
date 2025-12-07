@@ -65,6 +65,14 @@ module.exports = {
       ],
       'expo-apple-authentication',
       'expo-file-system',
+      [
+        'expo-navigation-bar',
+        {
+          position: 'absolute',
+          backgroundColor: '#ffffff00',
+          buttonStyle: 'dark',
+        },
+      ],
     ],
   },
 };
