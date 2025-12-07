@@ -92,8 +92,12 @@ export default function UserProfileModal({
         .eq('id', userId)
         .single();
 
-      if (userError && userError.code !== 'PGRST116') {
-        console.error('Error fetching user:', userError);
+      if (userError) {
+        if (userError.code === 'PGRST116') {
+          console.error('User not found:', userId);
+        } else {
+          console.error('Error fetching user:', userError);
+        }
       } else if (userData) {
         setUser(userData as User);
       }
@@ -105,8 +109,38 @@ export default function UserProfileModal({
         .eq('user_id', userId)
         .single();
 
-      if (statsError && statsError.code !== 'PGRST116') {
-        console.error('Error fetching stats:', statsError);
+      if (statsError) {
+        if (statsError.code === 'PGRST116') {
+          // Stats don't exist, create default stats
+          console.log('Stats not found, creating default stats for user:', userId);
+          const { data: newStats, error: createError } = await supabase
+            .from('user_stats')
+            .insert({
+              user_id: userId,
+              total_nfts: 0,
+              common_count: 0,
+              rare_count: 0,
+              epic_count: 0,
+              legendary_count: 0,
+              level: 1,
+              experience: 0,
+              daily_streak: 0,
+              nfts_today: 0,
+              nfts_this_week: 0,
+              coins: 0,
+              total_distance_km: 0,
+            })
+            .select()
+            .single();
+
+          if (createError) {
+            console.error('Error creating default stats:', createError);
+          } else if (newStats) {
+            setStats(newStats as UserStats);
+          }
+        } else {
+          console.error('Error fetching stats:', statsError);
+        }
       } else if (statsData) {
         setStats(statsData as UserStats);
       }

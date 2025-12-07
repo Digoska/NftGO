@@ -66,11 +66,14 @@ export default function SignupScreen() {
     setLoading(true);
     setEmailError('');
     try {
-      // Send OTP code to email (Supabase sends 8-digit codes by default)
+      // Send OTP code to email
+      // IMPORTANT: Do NOT set emailRedirectTo - that would send magic links instead of OTP codes
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
           shouldCreateUser: true,
+          // Explicitly do NOT set emailRedirectTo to ensure OTP codes are sent
+          // If emailRedirectTo is set, Supabase sends magic links instead
         },
       });
 
@@ -560,6 +563,7 @@ export default function SignupScreen() {
                     email: email.trim(),
                     options: {
                       shouldCreateUser: true,
+                      // Do NOT set emailRedirectTo - keep OTP code mode
                     },
                   });
                   if (error) {
