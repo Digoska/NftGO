@@ -50,20 +50,19 @@ export default function StatCard({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 12,
+    elevation: 3,
     height: 100,
     width: 160,
     marginRight: spacing.md,
-    borderWidth: 1,
-    borderColor: '#F3F4F6', // Very light border
+    borderWidth: 0,
     minWidth: 160,
   },
   iconContainer: {

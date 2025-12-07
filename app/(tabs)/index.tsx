@@ -415,7 +415,7 @@ export default function HomeScreen() {
               label="Today"
               secondaryValue={`${stats?.nfts_this_week || 0} this week`}
               iconColor={colors.secondary}
-              backgroundColor={colors.secondary + '15'}
+              backgroundColor="#F3E8FF"
               onPress={() =>
                 setSelectedStat({
                   icon: 'calendar',
@@ -423,7 +423,7 @@ export default function HomeScreen() {
                   value: `${stats?.nfts_today || 0} today`,
                   description: 'Your NFT collection activity',
                   iconColor: colors.secondary,
-                  backgroundColor: colors.secondary + '15',
+                  backgroundColor: '#F3E8FF',
                   additionalInfo: [
                     { label: 'Today', value: stats?.nfts_today || 0 },
                     { label: 'This Week', value: stats?.nfts_this_week || 0 },
@@ -436,7 +436,7 @@ export default function HomeScreen() {
               value={stats?.rank && stats.rank > 0 ? `#${stats.rank}` : '—'}
               label="Rank"
               iconColor={colors.warning}
-              backgroundColor={colors.warning + '15'}
+              backgroundColor="#FFF7ED"
               onPress={() => {
                 // Fetch current rank from leaderboard
                 fetchLeaderboard().then(() => {
@@ -447,7 +447,7 @@ export default function HomeScreen() {
                     value: userRank > 0 ? `#${userRank}` : 'Unranked',
                     description: 'Your position on the global leaderboard',
                     iconColor: colors.warning,
-                    backgroundColor: colors.warning + '15',
+                    backgroundColor: '#FFF7ED',
                     additionalInfo: [
                       { label: 'Total NFTs', value: stats?.total_nfts || 0 },
                       { label: 'Level', value: stats?.level || 1 },
@@ -462,7 +462,7 @@ export default function HomeScreen() {
               value={stats?.coins || 0}
               label="Coins"
               iconColor={colors.primary}
-              backgroundColor={colors.primary + '15'}
+              backgroundColor="#F3E8FF"
               onPress={() =>
                 setSelectedStat({
                   icon: 'wallet',
@@ -470,7 +470,7 @@ export default function HomeScreen() {
                   value: stats?.coins || 0,
                   description: 'In-game currency earned from collecting NFTs',
                   iconColor: colors.primary,
-                  backgroundColor: colors.primary + '15',
+                  backgroundColor: '#F3E8FF',
                 })
               }
             />
@@ -479,7 +479,7 @@ export default function HomeScreen() {
               value={stats?.total_nfts || 0}
               label="Total NFTs"
               iconColor={colors.secondary}
-              backgroundColor={colors.secondary + '15'}
+              backgroundColor="#F3E8FF"
               onPress={() =>
                 setSelectedStat({
                   icon: 'cube',
@@ -487,7 +487,7 @@ export default function HomeScreen() {
                   value: stats?.total_nfts || 0,
                   description: 'Total NFTs in your collection',
                   iconColor: colors.secondary,
-                  backgroundColor: colors.secondary + '15',
+                  backgroundColor: '#F3E8FF',
                   additionalInfo: [
                     { label: 'Common', value: stats?.common_count || 0 },
                     { label: 'Rare', value: stats?.rare_count || 0 },
