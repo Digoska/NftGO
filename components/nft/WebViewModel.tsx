@@ -97,7 +97,7 @@ export default function WebViewModel({ uri, poster, autoRotate = true }: WebView
           auto-rotate="${autoRotate}"
           autoplay
           shadow-intensity="1"
-          camera-orbit="45deg 55deg 2.5m"
+          camera-orbit="45deg 55deg 150%"
           disable-zoom
           interaction-prompt="none"
         >

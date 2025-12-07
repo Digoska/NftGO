@@ -5,12 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   Modal,
   FlatList,
   ActivityIndicator,
   Animated,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -22,7 +22,15 @@ import { spacing } from '../../constants/spacing';
 import VideoNFT from '../../components/nft/VideoNFT';
 import WebViewModel from '../../components/nft/WebViewModel';
 import CachedImage from '../../components/nft/CachedImage';
-import { getOrCacheFile, preCacheFiles } from '../../lib/nftCache';
+import { preCacheFiles } from '../../lib/nftCache';
+
+const { width } = Dimensions.get('window');
+
+// Calculate card size for 2-column grid
+const GRID_PADDING = spacing.md;
+const GRID_GAP = spacing.sm; // Tighter gap (8px)
+// Width = (Screen Width - PaddingLeft - PaddingRight - Gap) / 2
+const CARD_WIDTH = (width - (GRID_PADDING * 2) - GRID_GAP) / 2;
 
 export default function WalletScreen() {
   const { user } = useAuth();
@@ -43,7 +51,6 @@ export default function WalletScreen() {
 
   // Animate filter change
   useEffect(() => {
-    // Fade out, change filter, fade in
     Animated.sequence([
       Animated.timing(listOpacity, {
         toValue: 0,
@@ -56,10 +63,6 @@ export default function WalletScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    if (user) {
-      fetchUserNFTs();
-    }
   }, [filter]);
 
   useEffect(() => {
@@ -80,9 +83,6 @@ export default function WalletScreen() {
     }
 
     try {
-      console.log('🔍 Fetching NFTs for user:', user.id);
-      console.log('🔍 Filter:', filter);
-      
       let query = supabase
         .from('user_nfts')
         .select(`
@@ -96,45 +96,26 @@ export default function WalletScreen() {
         query = query.eq('nfts.rarity', filter);
       }
 
-      console.log('🔍 Query built, executing...');
       const { data, error } = await query;
-      console.log('🔍 Query result - error:', error);
-      console.log('🔍 Query result - data:', data);
 
       if (error) {
         console.error('Error fetching user NFTs:', error);
       } else if (data) {
-        console.log('✅ Fetched user NFTs:', data.length, 'items');
-        console.log('✅ Raw data sample:', JSON.stringify(data[0], null, 2));
-        
-        // Map Supabase response to UserNFT format
-        // Supabase returns "nfts" (plural) but we need "nft" (singular)
         const nfts = (data as any[]).map((item) => ({
           ...item,
-          nft: item.nfts || item.nft, // Support both formats
+          nft: item.nfts || item.nft,
         })) as UserNFT[];
         
-        const withNftData = nfts.filter(item => item.nft);
-        console.log('✅ NFTs with nft data:', withNftData.length);
-        if (withNftData.length > 0) {
-          console.log('✅ First NFT:', withNftData[0].nft?.name, withNftData[0].nft?.image_url);
-        }
         setUserNFTs(nfts);
         
-        // Pre-cache all NFT media files
+        // Pre-cache media
         const mediaUrls = nfts
           .map(item => item.nft?.image_url)
           .filter((url): url is string => !!url);
         
         if (mediaUrls.length > 0) {
-          console.log('📦 Pre-caching', mediaUrls.length, 'NFT media files');
-          // Cache in background (don't await)
-          preCacheFiles(mediaUrls).catch(err => {
-            console.error('Error pre-caching NFT media:', err);
-          });
+          preCacheFiles(mediaUrls).catch(console.error);
         }
-      } else {
-        console.log('⚠️ No data returned from query');
       }
     } catch (error) {
       console.error('Error in fetchUserNFTs:', error);
@@ -155,16 +136,11 @@ export default function WalletScreen() {
 
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
-      case 'common':
-        return colors.textMuted;
-      case 'rare':
-        return colors.primary;
-      case 'epic':
-        return colors.secondary;
-      case 'legendary':
-        return colors.warning;
-      default:
-        return colors.textMuted;
+      case 'common': return colors.textMuted;
+      case 'rare': return colors.primary;
+      case 'epic': return colors.secondary;
+      case 'legendary': return colors.warning;
+      default: return colors.textMuted;
     }
   };
 
@@ -173,34 +149,15 @@ export default function WalletScreen() {
   };
 
   const filteredNFTs = useMemo(() => {
-    console.log('🔍 Filtering NFTs. Total userNFTs:', userNFTs.length);
-    const filtered = userNFTs.filter((userNFT) => {
-      if (!userNFT.nft) {
-        console.log('⚠️ UserNFT without nft data:', userNFT.id);
-        return false;
-      }
+    return userNFTs.filter((userNFT) => {
+      if (!userNFT.nft) return false;
       if (filter === 'all') return true;
-      const matches = userNFT.nft.rarity === filter;
-      if (!matches) {
-        console.log(`⚠️ NFT ${userNFT.nft.name} rarity ${userNFT.nft.rarity} doesn't match filter ${filter}`);
-      }
-      return matches;
+      return userNFT.nft.rarity === filter;
     });
-    console.log('🔍 Filtered NFTs count:', filtered.length);
-    if (filtered.length > 0) {
-      console.log('🔍 First filtered NFT:', filtered[0].nft?.name);
-    }
-    return filtered;
   }, [userNFTs, filter]);
 
-  // Calculate rarity breakdown
   const rarityStats = useMemo(() => {
-    const stats = {
-      common: 0,
-      rare: 0,
-      epic: 0,
-      legendary: 0,
-    };
+    const stats = { common: 0, rare: 0, epic: 0, legendary: 0 };
     userNFTs.forEach((userNFT) => {
       const rarity = userNFT.nft?.rarity;
       if (rarity && rarity in stats) {
@@ -210,6 +167,66 @@ export default function WalletScreen() {
     return stats;
   }, [userNFTs]);
 
+  const ListHeaderComponent = () => (
+    <View style={styles.headerContainer}>
+      {/* Title Section */}
+      <View style={styles.titleSection}>
+        <Text style={styles.title}>My Wallet</Text>
+        <Text style={styles.subtitle}>{userNFTs.length} NFT{userNFTs.length !== 1 ? 's' : ''}</Text>
+      </View>
+
+      {/* Stats Cards */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.statsScrollContent}
+        style={styles.statsScroll}
+      >
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{userNFTs.length}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: '#F3F4F6' }]}>
+          <Text style={[styles.statValue, { color: colors.textMuted }]}>{rarityStats.common}</Text>
+          <Text style={styles.statLabel}>Common</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: '#F3E8FF' }]}>
+          <Text style={[styles.statValue, { color: colors.primary }]}>{rarityStats.rare}</Text>
+          <Text style={styles.statLabel}>Rare</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: '#E0E7FF' }]}>
+          <Text style={[styles.statValue, { color: colors.secondary }]}>{rarityStats.epic}</Text>
+          <Text style={styles.statLabel}>Epic</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: '#FFF7ED' }]}>
+          <Text style={[styles.statValue, { color: colors.warning }]}>{rarityStats.legendary}</Text>
+          <Text style={styles.statLabel}>Legendary</Text>
+        </View>
+      </ScrollView>
+
+      {/* Filter Buttons */}
+      <View style={styles.filterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          {(['all', 'common', 'rare', 'epic', 'legendary'] as const).map((rarity, index) => (
+            <FilterButton
+              key={rarity}
+              rarity={rarity}
+              isActive={filter === rarity}
+              onPress={() => setFilter(rarity)}
+              getRarityLabel={getRarityLabel}
+              isFirst={index === 0}
+              isLast={index === 4}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -218,75 +235,6 @@ export default function WalletScreen() {
       </View>
     );
   }
-
-  const ListHeaderComponent = () => (
-    <>
-      {/* Enhanced Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>My Wallet</Text>
-        <Text style={styles.subtitle}>{userNFTs.length} NFT{userNFTs.length !== 1 ? 's' : ''}</Text>
-      </View>
-
-      {/* Stats Cards */}
-      {userNFTs.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.statsContainer}
-          contentContainerStyle={styles.statsContent}
-        >
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{userNFTs.length}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.textMuted + '15' }]}>
-            <Text style={[styles.statValue, { color: colors.textMuted }]}>{rarityStats.common}</Text>
-            <Text style={styles.statLabel}>Common</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.primary + '15' }]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{rarityStats.rare}</Text>
-            <Text style={styles.statLabel}>Rare</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.secondary + '15' }]}>
-            <Text style={[styles.statValue, { color: colors.secondary }]}>{rarityStats.epic}</Text>
-            <Text style={styles.statLabel}>Epic</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.warning + '15' }]}>
-            <Text style={[styles.statValue, { color: colors.warning }]}>{rarityStats.legendary}</Text>
-            <Text style={styles.statLabel}>Legendary</Text>
-          </View>
-        </ScrollView>
-      )}
-
-      {/* Enhanced Filter Buttons */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterContainer}
-        contentContainerStyle={styles.filterContent}
-      >
-        {(['all', 'common', 'rare', 'epic', 'legendary'] as const).map((rarity, index) => {
-          const isFirst = index === 0;
-          const isLast = index === (['all', 'common', 'rare', 'epic', 'legendary'] as const).length - 1;
-          return (
-            <FilterButton
-              key={rarity}
-              rarity={rarity}
-              isActive={filter === rarity}
-              onPress={() => setFilter(rarity)}
-              getRarityLabel={getRarityLabel}
-              isFirst={isFirst}
-              isLast={isLast}
-            />
-          );
-        })}
-      </ScrollView>
-    </>
-  );
-
-  console.log('🎨 Render - filteredNFTs.length:', filteredNFTs.length);
-  console.log('🎨 Render - userNFTs.length:', userNFTs.length);
-  console.log('🎨 Render - filter:', filter);
 
   return (
     <View style={styles.container}>
@@ -301,7 +249,8 @@ export default function WalletScreen() {
             data={filteredNFTs}
             numColumns={2}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.grid}
+            contentContainerStyle={styles.gridContainer}
+            columnWrapperStyle={styles.gridColumnWrapper}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={ListHeaderComponent}
             refreshControl={
@@ -313,18 +262,12 @@ export default function WalletScreen() {
               />
             }
             renderItem={({ item, index }) => {
-              const nft = item.nft;
-              console.log(`🎨 Rendering NFT ${index}:`, nft?.name || 'NO NFT DATA');
-              if (!nft) {
-                console.log('❌ No NFT data in item:', item);
-                return null;
-              }
-
+              if (!item.nft) return null;
               return (
                 <NFTCard
-                  nft={nft}
+                  nft={item.nft}
                   index={index}
-                  onPress={() => handleNFTPress(nft)}
+                  onPress={() => handleNFTPress(item.nft!)}
                   getRarityColor={getRarityColor}
                   getRarityLabel={getRarityLabel}
                 />
@@ -371,9 +314,7 @@ export default function WalletScreen() {
                         />
                       ) : selectedNFT.media_type === 'model' ? (
                         <View style={{ height: 300, width: '100%' }}>
-                          <WebViewModel
-                            uri={selectedNFT.image_url}
-                          />
+                          <WebViewModel uri={selectedNFT.image_url} />
                         </View>
                       ) : (
                         <CachedImage
@@ -383,35 +324,16 @@ export default function WalletScreen() {
                         />
                       )
                     ) : (
-                      <View
-                        style={[
-                          styles.detailImagePlaceholder,
-                          { backgroundColor: getRarityColor(selectedNFT.rarity) + '20' },
-                        ]}
-                      >
-                        <Ionicons
-                          name="image-outline"
-                          size={80}
-                          color={getRarityColor(selectedNFT.rarity)}
-                        />
+                      <View style={[styles.detailImagePlaceholder, { backgroundColor: getRarityColor(selectedNFT.rarity) + '20' }]}>
+                        <Ionicons name="image-outline" size={80} color={getRarityColor(selectedNFT.rarity)} />
                       </View>
                     )}
                   </View>
 
                   <Text style={styles.detailName}>{selectedNFT.name}</Text>
                   <View style={styles.detailRarityContainer}>
-                    <View
-                      style={[
-                        styles.rarityDot,
-                        { backgroundColor: getRarityColor(selectedNFT.rarity) },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.detailRarity,
-                        { color: getRarityColor(selectedNFT.rarity) },
-                      ]}
-                    >
+                    <View style={[styles.rarityDot, { backgroundColor: getRarityColor(selectedNFT.rarity) }]} />
+                    <Text style={[styles.detailRarity, { color: getRarityColor(selectedNFT.rarity) }]}>
                       {getRarityLabel(selectedNFT.rarity)}
                     </Text>
                   </View>
@@ -428,59 +350,41 @@ export default function WalletScreen() {
   );
 }
 
-// Filter Button Component with Animation
+// Redesigned Filter Button
 function FilterButton({
   rarity,
   isActive,
   onPress,
   getRarityLabel,
-  isFirst = false,
-  isLast = false,
+  isFirst,
+  isLast,
 }: {
   rarity: 'all' | 'common' | 'rare' | 'epic' | 'legendary';
   isActive: boolean;
   onPress: () => void;
   getRarityLabel: (rarity: string) => string;
-  isFirst?: boolean;
-  isLast?: boolean;
+  isFirst: boolean;
+  isLast: boolean;
 }) {
-  const scaleAnim = useRef(new Animated.Value(isActive ? 1.05 : 1)).current;
-
-  useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: isActive ? 1.05 : 1,
-      tension: 300,
-      friction: 20,
-      useNativeDriver: true,
-    }).start();
-  }, [isActive]);
-
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity
-        style={[
-          styles.filterButton,
-          isActive && styles.filterButtonActive,
-          isFirst && styles.filterButtonFirst,
-          isLast && styles.filterButtonLast,
-        ]}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={[
-            styles.filterText,
-            isActive && styles.filterTextActive,
-          ]}
-        >
-          {rarity === 'all' ? 'All' : getRarityLabel(rarity)}
-        </Text>
-      </TouchableOpacity>
-    </Animated.View>
+    <TouchableOpacity
+      style={[
+        styles.filterButton,
+        isActive && styles.filterButtonActive,
+        isFirst && { marginLeft: spacing.md },
+        isLast && { marginRight: spacing.md },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
+        {rarity === 'all' ? 'All' : getRarityLabel(rarity)}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
-// NFT Card Component
+// Redesigned NFT Card
 function NFTCard({
   nft,
   index,
@@ -499,38 +403,32 @@ function NFTCard({
   useEffect(() => {
     Animated.timing(opacity, {
       toValue: 1,
-      duration: 300,
+      duration: 400,
       delay: index * 50,
       useNativeDriver: true,
     }).start();
   }, []);
 
   return (
-    <Animated.View style={{ opacity }}>
+    <Animated.View style={[{ opacity, width: CARD_WIDTH }]}>
       <TouchableOpacity
         style={styles.nftCard}
         onPress={onPress}
-        activeOpacity={0.8}
+        activeOpacity={0.9}
       >
-        <View
-          style={[
-            styles.nftImageContainer,
-            { borderColor: getRarityColor(nft.rarity) + '40' },
-          ]}
-        >
+        {/* Image Section */}
+        <View style={[styles.nftImageContainer, { backgroundColor: '#F3F4F6' }]}>
           {nft.image_url ? (
             nft.media_type === 'video' ? (
               <VideoNFT
                 uri={nft.image_url}
                 style={styles.nftImage}
-                autoPlay={true}
-                loop={true}
+                autoPlay={false}
+                loop={false}
               />
             ) : nft.media_type === 'model' ? (
-              <View style={{ height: 160, width: '100%' }}>
-                <WebViewModel
-                  uri={nft.image_url}
-                />
+              <View style={{ height: '100%', width: '100%' }}>
+                <WebViewModel uri={nft.image_url} />
               </View>
             ) : (
               <CachedImage
@@ -540,91 +438,38 @@ function NFTCard({
               />
             )
           ) : (
-            <View
-              style={[
-                styles.nftImagePlaceholder,
-                { backgroundColor: getRarityColor(nft.rarity) + '20' },
-              ]}
-            >
-              <Ionicons name="image-outline" size={40} color={getRarityColor(nft.rarity)} />
+            <View style={[styles.nftImagePlaceholder, { backgroundColor: getRarityColor(nft.rarity) + '15' }]}>
+              <Ionicons name="image-outline" size={32} color={getRarityColor(nft.rarity)} />
             </View>
           )}
-          {/* Rarity Badge */}
-          <View
-            style={[
-              styles.rarityBadge,
-              { backgroundColor: getRarityColor(nft.rarity) },
-            ]}
-          >
-            <Text style={styles.rarityBadgeText}>
-              {getRarityLabel(nft.rarity).charAt(0)}
-            </Text>
+          
+          {/* Rarity Tag */}
+          <View style={[styles.rarityTag, { backgroundColor: getRarityColor(nft.rarity) }]}>
+            <Text style={styles.rarityTagText}>{getRarityLabel(nft.rarity)}</Text>
           </View>
         </View>
+
+        {/* Info Section */}
         <View style={styles.nftInfo}>
-          <Text style={styles.nftName} numberOfLines={1}>
-            {nft.name}
-          </Text>
-          <View style={styles.nftRarityContainer}>
-            <View
-              style={[
-                styles.rarityDot,
-                { backgroundColor: getRarityColor(nft.rarity) },
-              ]}
-            />
-            <Text
-              style={[
-                styles.nftRarity,
-                { color: getRarityColor(nft.rarity) },
-              ]}
-            >
-              {getRarityLabel(nft.rarity)}
-            </Text>
-          </View>
+          <Text style={styles.nftName} numberOfLines={1}>{nft.name}</Text>
+          <Text style={styles.nftDate}>Collected</Text>
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-// Empty State Component
-function EmptyState({
-  filter,
-  getRarityLabel,
-}: {
-  filter: string;
-  getRarityLabel: (rarity: string) => string;
-}) {
-  const [scaleAnim] = useState(new Animated.Value(0));
-
-  useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      tension: 50,
-      friction: 7,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
+function EmptyState({ filter, getRarityLabel }: { filter: string; getRarityLabel: (r: string) => string }) {
   return (
     <View style={styles.emptyContainer}>
-      <Animated.View
-        style={[
-          styles.emptyIconContainer,
-          {
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
-      >
-        <Ionicons name="wallet-outline" size={80} color={colors.textMuted} />
-      </Animated.View>
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="wallet-outline" size={64} color={colors.textMuted} />
+      </View>
       <Text style={styles.emptyText}>
-        {filter === 'all'
-          ? "You don't have any NFTs yet"
-          : `You don't have any ${getRarityLabel(filter)} NFTs`}
+        {filter === 'all' ? "No NFTs Found" : `No ${getRarityLabel(filter)} NFTs`}
       </Text>
       <Text style={styles.emptySubtext}>
-        Go to the map and start collecting!
+        Explore the map to find and collect more NFTs!
       </Text>
     </View>
   );
@@ -646,133 +491,124 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: spacing.md,
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg + spacing.xs,
-    paddingBottom: spacing.md,
+  // Header
+  headerContainer: {
+    paddingTop: spacing.lg,
+    backgroundColor: colors.background,
+  },
+  titleSection: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
   },
   title: {
     ...typography.h1,
+    fontSize: 28,
     color: colors.text,
-    marginBottom: spacing.xs,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
     fontSize: 16,
   },
-  // Stats Cards
-  statsContainer: {
-    marginBottom: spacing.lg,
+  // Stats
+  statsScroll: {
+    marginBottom: spacing.md,
   },
-  statsContent: {
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
+  statsScrollContent: {
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
+    gap: spacing.sm,
   },
   statCard: {
-    width: 100,
-    height: 100,
-    backgroundColor: colors.primary + '15',
+    minWidth: 100,
+    height: 80,
+    backgroundColor: '#F9FAFB',
     borderRadius: 16,
     padding: spacing.md,
-    marginRight: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
+    // Soft shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statValue: {
     ...typography.h2,
-    color: colors.primary,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 24,
   },
   statLabel: {
     ...typography.caption,
     color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginTop: 2,
   },
-  // Filter Buttons
-  filterContainer: {
-    marginBottom: spacing.lg,
+  // Filters
+  filterSection: {
+    marginBottom: spacing.sm,
   },
-  filterContent: {
-    paddingLeft: 0,
-    paddingRight: 0,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+  filterScrollContent: {
+    paddingVertical: spacing.sm,
+    // Horizontal padding handled by isFirst/isLast
   },
   filterButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 24,
-    backgroundColor: colors.backgroundCard,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 100, // Pill shape
+    backgroundColor: '#F3F4F6', // Light gray default
     marginRight: spacing.sm,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    minWidth: 70,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   filterButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.primary, // Active Purple
+    // Active shadow
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  filterButtonFirst: {
-    marginLeft: spacing.lg,
-  },
-  filterButtonLast: {
-    marginRight: spacing.lg,
+    shadowRadius: 8,
+    elevation: 4,
   },
   filterText: {
     ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '500',
+    color: colors.text,
+    fontWeight: '600',
     fontSize: 14,
   },
   filterTextActive: {
-    color: colors.background,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  // NFT Grid
-  grid: {
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingBottom: spacing.lg,
-    paddingTop: spacing.md,
+  // Grid
+  gridContainer: {
+    paddingHorizontal: GRID_PADDING,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl, // Space for bottom nav
+  },
+  gridColumnWrapper: {
+    justifyContent: 'space-between',
+    marginBottom: GRID_GAP,
   },
   nftCard: {
-    flex: 1,
-    margin: spacing.sm,
     backgroundColor: colors.background,
     borderRadius: 16,
     overflow: 'hidden',
-    maxWidth: '48%',
+    // No borders
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   nftImageContainer: {
     width: '100%',
-    height: 160,
-    borderWidth: 2,
-    borderRadius: 12,
+    height: 180, // Taller image
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: colors.backgroundCard,
   },
   nftImage: {
     width: '100%',
@@ -784,30 +620,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  nftImageText: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  rarityBadge: {
+  rarityTag: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  rarityBadgeText: {
-    ...typography.caption,
-    color: colors.background,
-    fontWeight: '700',
-    fontSize: 12,
+  rarityTagText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   nftInfo: {
     padding: spacing.md,
@@ -815,54 +645,40 @@ const styles = StyleSheet.create({
   nftName: {
     ...typography.bodyBold,
     color: colors.text,
-    marginBottom: spacing.xs,
     fontSize: 15,
+    marginBottom: 2,
   },
-  nftRarityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rarityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: spacing.xs,
-  },
-  nftRarity: {
+  nftDate: {
     ...typography.caption,
-    textTransform: 'capitalize',
-    fontWeight: '500',
+    color: colors.textMuted,
     fontSize: 12,
   },
   // Empty State
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: spacing.xl,
-    minHeight: 400,
+    marginTop: 60,
   },
   emptyIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.backgroundCard,
-    justifyContent: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   emptyText: {
     ...typography.h3,
     color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-    fontWeight: '600',
+    marginBottom: spacing.xs,
   },
   emptySubtext: {
     ...typography.body,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     textAlign: 'center',
-    paddingHorizontal: spacing.xl,
   },
   // Modal
   modalContainer: {
@@ -879,14 +695,14 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: spacing.xl,
     maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
     elevation: 10,
   },
   modalHeader: {
@@ -898,28 +714,28 @@ const styles = StyleSheet.create({
   modalTitle: {
     ...typography.h2,
     color: colors.text,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   modalCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.backgroundCard,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   detailImageContainer: {
     width: '100%',
-    height: 280,
-    borderRadius: 16,
+    height: 320,
+    borderRadius: 24,
     overflow: 'hidden',
     marginBottom: spacing.lg,
-    backgroundColor: colors.backgroundCard,
+    backgroundColor: '#F3F4F6',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowRadius: 16,
+    elevation: 8,
   },
   detailImage: {
     width: '100%',
@@ -931,15 +747,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  detailImageText: {
+  detailName: {
     ...typography.h1,
     color: colors.text,
-  },
-  detailName: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: spacing.sm,
-    fontWeight: '700',
+    marginBottom: spacing.xs,
+    fontSize: 28,
   },
   detailRarityContainer: {
     flexDirection: 'row',
@@ -949,23 +761,20 @@ const styles = StyleSheet.create({
   detailRarity: {
     ...typography.body,
     textTransform: 'capitalize',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 16,
   },
   detailDescription: {
     ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.lg,
     lineHeight: 24,
-    fontSize: 15,
+    fontSize: 16,
   },
-  closeButton: {
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    ...typography.body,
-    color: colors.textSecondary,
+  rarityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: spacing.sm,
   },
 });
 
