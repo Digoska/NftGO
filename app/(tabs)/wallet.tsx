@@ -137,7 +137,7 @@ export default function WalletScreen() {
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
       case 'common': return colors.textMuted;
-      case 'rare': return colors.primary;
+      case 'rare': return colors.rare;
       case 'epic': return colors.secondary;
       case 'legendary': return colors.warning;
       default: return colors.textMuted;
@@ -190,8 +190,8 @@ export default function WalletScreen() {
           <Text style={[styles.statValue, { color: colors.textMuted }]}>{rarityStats.common}</Text>
           <Text style={styles.statLabel}>Common</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: '#F3E8FF' }]}>
-          <Text style={[styles.statValue, { color: colors.primary }]}>{rarityStats.rare}</Text>
+        <View style={[styles.statCard, { backgroundColor: '#DBEAFE' }]}>
+          <Text style={[styles.statValue, { color: colors.rare }]}>{rarityStats.rare}</Text>
           <Text style={styles.statLabel}>Rare</Text>
         </View>
         <View style={[styles.statCard, { backgroundColor: '#E0E7FF' }]}>
@@ -211,17 +211,21 @@ export default function WalletScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterScrollContent}
         >
-          {(['all', 'common', 'rare', 'epic', 'legendary'] as const).map((rarity, index) => (
-            <FilterButton
-              key={rarity}
-              rarity={rarity}
-              isActive={filter === rarity}
-              onPress={() => setFilter(rarity)}
-              getRarityLabel={getRarityLabel}
-              isFirst={index === 0}
-              isLast={index === 4}
-            />
-          ))}
+          {(['all', 'common', 'rare', 'epic', 'legendary'] as const).map((rarity, index) => {
+            const activeColor = rarity === 'all' ? colors.primary : getRarityColor(rarity);
+            return (
+              <FilterButton
+                key={rarity}
+                rarity={rarity}
+                isActive={filter === rarity}
+                onPress={() => setFilter(rarity)}
+                getRarityLabel={getRarityLabel}
+                activeColor={activeColor}
+                isFirst={index === 0}
+                isLast={index === 4}
+              />
+            );
+          })}
         </ScrollView>
       </View>
     </View>
@@ -356,6 +360,7 @@ function FilterButton({
   isActive,
   onPress,
   getRarityLabel,
+  activeColor,
   isFirst,
   isLast,
 }: {
@@ -363,6 +368,7 @@ function FilterButton({
   isActive: boolean;
   onPress: () => void;
   getRarityLabel: (rarity: string) => string;
+  activeColor: string;
   isFirst: boolean;
   isLast: boolean;
 }) {
@@ -371,6 +377,7 @@ function FilterButton({
       style={[
         styles.filterButton,
         isActive && styles.filterButtonActive,
+        isActive && { backgroundColor: activeColor, shadowColor: activeColor },
         isFirst && { marginLeft: spacing.md },
         isLast && { marginRight: spacing.md },
       ]}

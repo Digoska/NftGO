@@ -238,7 +238,7 @@ export default function ProfileScreen() {
           </View>
           <View style={[styles.rarityCard, styles.rareCard]}>
             <View style={styles.rarityIconContainer}>
-              <Ionicons name="ellipse" size={12} color={colors.primary} />
+              <Ionicons name="ellipse" size={12} color={colors.rare} />
             </View>
             <Text style={styles.rarityValue}>{stats?.rare_count || 0}</Text>
             <Text style={styles.rarityLabel}>Rare</Text>
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   },
   rareCard: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
+    borderLeftColor: colors.rare,
   },
   epicCard: {
     borderLeftWidth: 3,

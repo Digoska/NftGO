@@ -259,7 +259,7 @@ export default function HomeScreen() {
       case 'common':
         return colors.textMuted;
       case 'rare':
-        return colors.primary;
+        return colors.rare;
       case 'epic':
         return colors.secondary;
       case 'legendary':
@@ -523,11 +523,11 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[
                 styles.rarityCardCompact,
-                { backgroundColor: colors.primary + '15', borderColor: colors.primary },
+                { backgroundColor: colors.rare + '15', borderColor: colors.rare },
               ]}
               onPress={() => router.push('/(tabs)/wallet')}
             >
-              <Text style={[styles.rarityValueCompact, { color: colors.primary }]} numberOfLines={1}>
+              <Text style={[styles.rarityValueCompact, { color: colors.rare }]} numberOfLines={1}>
                 {stats?.rare_count || 0} Rare
               </Text>
             </TouchableOpacity>
