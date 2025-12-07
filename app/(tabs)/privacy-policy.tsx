@@ -34,7 +34,7 @@ export default function PrivacyPolicyScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
-        <Text style={styles.lastUpdated}>Last Updated: November 2024</Text>
+        <Text style={styles.lastUpdated}>Last Updated: December 2024</Text>
 
         <Text style={styles.sectionTitle}>1. Introduction</Text>
         <Text style={styles.paragraph}>
