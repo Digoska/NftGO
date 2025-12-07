@@ -45,6 +45,7 @@
 - ✅ **UI Polish**: Redesigned Profile/Home dashboard to match target "Nikodem" design.
 - ✅ **Wallet Redesign**: Implemented borderless filters, larger cards, and improved grid layout.
 - ✅ **3D Fixes**: Fixed model cropping in cards by using relative camera distance.
+- ✅ **Visual Consistency**: Updated "Rare" rarity to use distinct Blue color scheme.
 
 ## ⚠️ Pending Actions (High Priority)
 

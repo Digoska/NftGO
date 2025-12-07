@@ -13,6 +13,9 @@ export const colors = {
   success: '#10b981',
   error: '#EF4444',
   warning: '#F59E0B',
+  info: '#3B82F6',
+  rare: '#3B82F6', // Blue for Rare
+  rareLight: '#DBEAFE', // Light Blue for Rare backgrounds
   border: '#E5E7EB',
   borderLight: '#F3F4F6',
   // Password strength colors

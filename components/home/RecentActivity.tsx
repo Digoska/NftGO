@@ -40,7 +40,7 @@ export default function RecentActivity({
       case 'common':
         return colors.textMuted;
       case 'rare':
-        return colors.primary;
+        return colors.rare;
       case 'epic':
         return colors.secondary;
       case 'legendary':
