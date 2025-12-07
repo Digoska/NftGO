@@ -43,6 +43,8 @@
 - ✅ **Android UX**: Implemented translucent navigation bar for modern edge-to-edge design.
 - ✅ **Expo Go Compatibility**: Suppressed "expo-notifications" errors in Expo Go client.
 - ✅ **UI Polish**: Redesigned Profile/Home dashboard to match target "Nikodem" design.
+- ✅ **Wallet Redesign**: Implemented borderless filters, larger cards, and improved grid layout.
+- ✅ **3D Fixes**: Fixed model cropping in cards by using relative camera distance.
 
 ## ⚠️ Pending Actions (High Priority)
 
