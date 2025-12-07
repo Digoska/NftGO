@@ -38,6 +38,12 @@
 - ✅ Created storage bucket policies SQL
 - ⚠️ **Action Required**: Run `docs/security/STORAGE_BUCKET_POLICIES.sql` in Supabase
 
+### 🐛 Bug Fixes & UX Improvements (Dec 2025)
+- ✅ **3D Models**: Implemented WebView-based rendering with offline caching to fix texture issues in Expo Go.
+- ✅ **Android UX**: Implemented translucent navigation bar for modern edge-to-edge design.
+- ✅ **Expo Go Compatibility**: Suppressed "expo-notifications" errors in Expo Go client.
+- ✅ **UI Polish**: Redesigned Profile/Home dashboard to match target "Nikodem" design.
+
 ## ⚠️ Pending Actions (High Priority)
 
 ### 1. Supabase Configuration
@@ -96,8 +102,8 @@
 ## 📊 Progress
 
 - **Security**: ✅ 100% Complete
-- **Bug Fixes**: 🔄 In Progress
-- **Performance**: ⏳ Pending
+- **Bug Fixes**: ✅ 90% Complete (Major issues resolved)
+- **Performance**: 🔄 In Progress (3D caching implemented)
 - **Testing**: ⏳ Pending
 - **App Store Prep**: ⏳ Pending
 

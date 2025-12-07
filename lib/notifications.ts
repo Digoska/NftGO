@@ -84,6 +84,11 @@ export async function requestNotificationPermissions(): Promise<boolean> {
  */
 export async function getExpoPushToken(): Promise<string | null> {
   try {
+    if (Constants.appOwnership === 'expo') {
+      console.log('Skipping push token registration in Expo Go');
+      return null;
+    }
+
     // Check if we already have a token
     const cachedToken = await AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
     if (cachedToken) {

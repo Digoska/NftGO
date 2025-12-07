@@ -2,6 +2,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '../lib/auth-context';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
+import * as NavigationBar from 'expo-navigation-bar';
 import { requestNotificationPermissions, setupNotificationListeners } from '../lib/notifications';
 
 // Setup Blob polyfill from expo-blob
@@ -53,6 +55,16 @@ try {
 }
 
 export default function RootLayout() {
+  // Configure Android Navigation Bar to be transparent
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      // Set navigation bar to be transparent and content to flow behind it
+      NavigationBar.setPositionAsync('absolute');
+      NavigationBar.setBackgroundColorAsync('#ffffff00'); // Transparent
+      NavigationBar.setButtonStyleAsync('dark'); // Dark icons (black buttons)
+    }
+  }, []);
+
   // Ensure Blob is available on mount
   useEffect(() => {
     if (typeof global.Blob === 'undefined') {
