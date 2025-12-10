@@ -1,7 +1,7 @@
 export interface User {
   id: string;
-  email?: string;
-  username?: string;
+  email: string;
+  username: string;
   full_name?: string;
   avatar_url?: string;
   x_username?: string;
@@ -28,28 +28,11 @@ export interface UserNFT {
   id: string;
   user_id: string;
   nft_id: string;
+  spawn_id?: string;
+  spawn_type?: 'personal' | 'global';
+  collection_latitude?: number;
+  collection_longitude?: number;
   collected_at: string;
-  nft?: NFT;
-}
-
-export interface UserStats {
-  user_id: string;
-  total_nfts: number;
-  common_count: number;
-  rare_count: number;
-  epic_count: number;
-  legendary_count: number;
-  level: number;
-  experience: number;
-  daily_streak?: number;
-  last_collection_date?: string;
-  total_distance_km?: number;
-  nfts_today?: number;
-  nfts_this_week?: number;
-  coins?: number;
-  rank?: number;
-  weekly_reset_date?: string;
-  updated_at?: string;
 }
 
 export interface Location {
@@ -59,47 +42,21 @@ export interface Location {
   timestamp?: number;
 }
 
-export interface AppUpdate {
-  id: string;
-  title: string;
-  description?: string;
-  full_description?: string;
-  image_url?: string;
-  type: 'announcement' | 'event' | 'update';
-  is_active: boolean;
-  priority: number;
-  action_url?: string;
-  section_enabled?: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface LeaderboardUser {
-  user_id: string;
-  username?: string;
-  avatar_url?: string;
-  total_nfts: number;
-  level: number;
-  experience: number;
-  rank: number;
-}
-
-export interface Badge {
-  id: string;
-  name: string;
-  display_name: string;
-  description?: string;
-  icon_name: string;
-  color: string;
-  rarity: 'common' | 'rare' | 'epic' | 'legendary' | 'exclusive';
-  created_at: string;
-}
-
-export interface UserBadge {
+export interface PersonalSpawn {
   id: string;
   user_id: string;
-  badge_id: string;
-  awarded_at: string;
-  badge?: Badge;
+  nft_id: string;
+  latitude: number;
+  longitude: number;
+  spawn_radius: number;
+  created_at: string;
+  expires_at: string;
+  collected: boolean;
+  collected_at?: string;
+  nft?: NFT; // Joined NFT details
 }
 
+export interface SpawnLocation {
+  latitude: number;
+  longitude: number;
+}
