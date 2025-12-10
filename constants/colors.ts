@@ -22,5 +22,15 @@ export const colors = {
   passwordWeak: '#EF4444',
   passwordMedium: '#F59E0B',
   passwordStrong: '#10B981',
+  // Rarity colors for NFT spawns
+  rarityCommon: '#9CA3AF', // Gray
+  rarityRare: '#3B82F6', // Blue
+  rarityEpic: '#8B5CF6', // Purple
+  rarityLegendary: '#F59E0B', // Orange/Gold
+  // Spawn marker backgrounds (lighter versions)
+  rarityCommonLight: '#F3F4F6',
+  rarityRareLight: '#DBEAFE',
+  rarityEpicLight: '#EDE9FE',
+  rarityLegendaryLight: '#FEF3C7',
 };
 
