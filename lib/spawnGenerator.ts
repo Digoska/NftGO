@@ -162,9 +162,10 @@ async function hasActiveSpawnsNearLocation(
 async function createNewSpawns(
   userId: string,
   userLat: number,
-  userLon: number
+  userLon: number,
+  count?: number
 ): Promise<PersonalSpawn[]> {
-  const spawnCount = Math.floor(Math.random() * (SPAWN_COUNT_MAX - SPAWN_COUNT_MIN + 1)) + SPAWN_COUNT_MIN;
+  const spawnCount = count || Math.floor(Math.random() * (SPAWN_COUNT_MAX - SPAWN_COUNT_MIN + 1)) + SPAWN_COUNT_MIN;
   const spawns: Partial<PersonalSpawn>[] = [];
   
   // Calculate expiration: NOW + 1 hour
@@ -216,6 +217,39 @@ async function createNewSpawns(
   
   console.log(`Successfully created ${data?.length || 0} personal spawns`);
   return data as PersonalSpawn[];
+}
+
+/**
+ * Refills personal spawns to ensure user has enough active spawns
+ * Target: 7-10 spawns
+ */
+export async function refillPersonalSpawns(
+  userId: string,
+  userLat: number,
+  userLon: number,
+  currentCount: number
+): Promise<PersonalSpawn[]> {
+  const targetMin = 7;
+  const targetMax = 10;
+  
+  // If we have enough spawns, don't generate more
+  if (currentCount >= targetMin) {
+    return [];
+  }
+  
+  // Calculate how many to generate
+  // We want to reach at least targetMin, potentially up to targetMax
+  const neededMin = targetMin - currentCount;
+  const neededMax = targetMax - currentCount;
+  
+  // Randomly choose how many to add (between needed min and max)
+  const countToGenerate = Math.floor(Math.random() * (neededMax - neededMin + 1)) + neededMin;
+  
+  if (countToGenerate <= 0) return [];
+  
+  console.log(`Refilling spawns: Current ${currentCount}, Target ${targetMin}-${targetMax}, Generating ${countToGenerate}`);
+  
+  return createNewSpawns(userId, userLat, userLon, countToGenerate);
 }
 
 /**

@@ -12,7 +12,7 @@ import Constants from 'expo-constants';
 import MapView, { PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentLocation, calculateDistance } from '../../lib/location';
-import { generatePersonalSpawns, getActivePersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
+import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
 import { getTimeRemaining } from '../../lib/collectNFT';
 import { supabase } from '../../lib/supabase';
 import { Location as LocationType, PersonalSpawn } from '../../types';
@@ -58,6 +58,30 @@ export default function MapScreen() {
       loadSpawns();
     }
   }, [user?.id, location]);
+
+  // Periodic spawn refill check (every 30 seconds)
+  useEffect(() => {
+    if (!user?.id || !location) return;
+
+    const interval = setInterval(async () => {
+      // Only refill if we are low on spawns
+      if (spawns.length < 7) {
+        console.log('🔄 Periodic check: Low spawns detected, refilling...');
+        const newSpawns = await refillPersonalSpawns(
+          user.id,
+          location.latitude,
+          location.longitude,
+          spawns.length
+        );
+        
+        if (newSpawns.length > 0) {
+          setSpawns(prev => [...prev, ...newSpawns]);
+        }
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user?.id, location, spawns.length]);
 
   const initializeLocation = async () => {
     try {
@@ -346,11 +370,31 @@ export default function MapScreen() {
     setShowCollectionModal(true);
   }, []);
 
-  const handleCollected = useCallback((collectedSpawn: PersonalSpawn) => {
+  const handleCollected = useCallback(async (collectedSpawn: PersonalSpawn) => {
     // Remove collected spawn from list
-    setSpawns((prev) => prev.filter((s) => s.id !== collectedSpawn.id));
+    const remainingSpawns = spawns.filter((s) => s.id !== collectedSpawn.id);
+    setSpawns(remainingSpawns);
     setSelectedSpawn(null);
-  }, []);
+    
+    // Trigger refill if low on spawns
+    if (remainingSpawns.length < 7 && user?.id && location) {
+      console.log('🔄 Collection triggered refill...');
+      try {
+        const newSpawns = await refillPersonalSpawns(
+          user.id,
+          location.latitude,
+          location.longitude,
+          remainingSpawns.length
+        );
+        
+        if (newSpawns.length > 0) {
+          setSpawns(prev => [...prev, ...newSpawns]);
+        }
+      } catch (error) {
+        console.error('Error refilling spawns:', error);
+      }
+    }
+  }, [spawns, user?.id, location]);
 
   const handleCloseModal = useCallback(() => {
     setShowCollectionModal(false);
