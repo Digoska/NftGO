@@ -124,3 +124,41 @@ export function calculateDistance(
   return R * c; // Distance in meters
 }
 
+export function isWithinRadius(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+  radiusMeters: number
+): boolean {
+  return calculateDistance(lat1, lon1, lat2, lon2) <= radiusMeters;
+}
+
+export function generateRandomPoint(
+  centerLat: number,
+  centerLon: number,
+  radiusMeters: number
+): { latitude: number; longitude: number } {
+  // Convert radius from meters to degrees (approximate)
+  // 1 degree latitude is approx 111,320 meters
+  const r = radiusMeters / 111320;
+  
+  const u = Math.random();
+  const v = Math.random();
+  
+  // Use square root of u to ensure uniform distribution within circle
+  const w = r * Math.sqrt(u);
+  const t = 2 * Math.PI * v;
+  
+  const x = w * Math.cos(t);
+  const y = w * Math.sin(t);
+  
+  // Adjust longitude for latitude
+  const xAdjusted = x / Math.cos(centerLat * (Math.PI / 180));
+  
+  return {
+    latitude: centerLat + y,
+    longitude: centerLon + xAdjusted,
+  };
+}
+
