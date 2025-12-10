@@ -68,10 +68,9 @@ async function validateSpawnCollection(
   }
   
   // 4. Check expiration
-  const now = new Date();
-  const expiresAt = new Date(spawn.expires_at);
+  const { isExpired } = getTimeRemaining(spawn.expires_at);
   
-  if (now > expiresAt) {
+  if (isExpired) {
     return {
       valid: false,
       error: {
@@ -296,9 +295,8 @@ export async function canCollectSpawn(
     return { canCollect: false, distance, error: 'Not your spawn' };
   }
   
-  const now = new Date();
-  const expiresAt = new Date(spawn.expires_at);
-  if (now > expiresAt) {
+  const { isExpired } = getTimeRemaining(spawn.expires_at);
+  if (isExpired) {
     return { canCollect: false, distance, error: 'Spawn expired' };
   }
   
