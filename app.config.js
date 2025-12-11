@@ -45,6 +45,7 @@ module.exports = {
         'ACCESS_COARSE_LOCATION',
         'ACCESS_BACKGROUND_LOCATION',
       ],
+      // Google Maps config removed to use OpenStreetMap
     },
     web: {
       favicon: './assets/favicon.png',

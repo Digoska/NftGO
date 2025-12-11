@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import Constants from 'expo-constants';
-import MapView, { PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentLocation, calculateDistance } from '../../lib/location';
 import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
@@ -540,12 +540,19 @@ export default function MapScreen() {
   }
 
   // Development build - show Apple Maps with spawns
+  // On Android, attempting to use OpenStreetMap (osmdroid) often requires complex config.
+  // Falling back to Google Maps (requires key) is safer.
+  // If 'osmdroid' caused "Element type is invalid", we revert to default (Google Maps).
+  const mapProvider = undefined; // Uses default (Google Maps on Android, Apple Maps on iOS)
+
+  console.log('🗺️ MapScreen rendering. MapView:', !!MapView);
+
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_DEFAULT}
+        provider={mapProvider}
         initialRegion={{
           latitude: location.latitude,
           longitude: location.longitude,
@@ -554,7 +561,7 @@ export default function MapScreen() {
         }}
         showsUserLocation
         showsMyLocationButton={false}
-        mapType="standard"
+        mapType={Platform.OS === 'android' ? "standard" : "standard"}
         showsPointsOfInterest={false}
         showsBuildings={false}
         showsTraffic={false}
