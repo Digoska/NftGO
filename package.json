@@ -56,6 +56,7 @@
   "devDependencies": {
     "@expo/cli": "^54.0.16",
     "@types/react": "~19.1.0",
+    "babel-plugin-transform-inline-environment-variables": "^0.4.4",
     "babel-preset-expo": "^54.0.7",
     "dotenv": "^17.2.3",
     "typescript": "~5.9.2"
