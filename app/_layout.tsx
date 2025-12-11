@@ -11,6 +11,10 @@ import { requestNotificationPermissions, setupNotificationListeners } from '../l
 // IMPORTANT: expo-blob requires native modules and does NOT work in Expo Go
 // It only works in development builds or production builds
 // For Expo Go, we need to use a different solution (GLTF with external textures)
+
+// DISABLED POLYFILL - Suspected cause of "JSON Parse error: Unexpected character: o" in release builds
+// It seems expo-blob interferes with fetch response handling, causing response.text() to return "[object Object]"
+/*
 try {
   // Try to import expo-blob
   const expoBlob = require('expo-blob');
@@ -53,6 +57,7 @@ try {
     console.warn('⚠️ GLB embedded textures will NOT work - use GLTF with external textures');
   }
 }
+*/
 
 export default function RootLayout() {
   // Configure Android Navigation Bar to be transparent
