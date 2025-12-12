@@ -96,3 +96,12 @@ pdf_*.pdf
 # Cursor AI
 .cursor/
 .cursor/worktrees.json
+
+# Database schemas and migrations
+supabase-schema.sql
+*_schema.sql
+database*.sql
+migration*.sql
+*.db
+*.sqlite
+*.sqlite3
