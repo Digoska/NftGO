@@ -26,6 +26,7 @@ import Leaderboard from '../../components/home/Leaderboard';
 import UpdatesFeed from '../../components/home/UpdatesFeed';
 import UpdateDetailModal from '../../components/home/UpdateDetailModal';
 import Button from '../../components/common/Button';
+import { getEmailBlurPreference, blurEmail } from '../../lib/emailBlur';
 
 export default function HomeScreen() {
   const { user, userProfile } = useAuth();
@@ -47,12 +48,19 @@ export default function HomeScreen() {
   const [updates, setUpdates] = useState<AppUpdate[]>([]);
   const [selectedUpdate, setSelectedUpdate] = useState<AppUpdate | null>(null);
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
+  const [emailBlurred, setEmailBlurred] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchData();
+      loadEmailBlurPreference();
     }
   }, [user]);
+
+  const loadEmailBlurPreference = async () => {
+    const blurred = await getEmailBlurPreference();
+    setEmailBlurred(blurred);
+  };
 
   const fetchData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -332,10 +340,12 @@ export default function HomeScreen() {
               )}
             </View>
             <View style={styles.profileInfo}>
+              <Text style={styles.profileEmail}>
+                {emailBlurred ? blurEmail(user?.email) : user?.email}
+              </Text>
               <Text style={styles.profileName}>
                 {userProfile?.full_name || 'User'}
               </Text>
-              <Text style={styles.profileEmail}>{user?.email}</Text>
             </View>
           </View>
         </View>

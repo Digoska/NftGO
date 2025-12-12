@@ -78,10 +78,9 @@ export default function RootLayout() {
         if (Blob) {
           global.Blob = Blob;
           globalThis.Blob = Blob;
-          console.log('✅ Blob polyfill loaded from expo-blob (on mount)');
         }
       } catch (error) {
-        console.warn('⚠️ Could not load Blob polyfill:', error);
+        // Blob polyfill not available (expected in Expo Go)
       }
     }
   }, []);
@@ -89,21 +88,14 @@ export default function RootLayout() {
   // Initialize notifications
   useEffect(() => {
     // Request permissions on app start
-    requestNotificationPermissions().then((granted) => {
-      if (granted) {
-        console.log('✅ Notification permissions granted');
-      } else {
-        console.log('⚠️ Notification permissions not granted');
-      }
-    });
+    requestNotificationPermissions();
 
     // Setup notification listeners
     const unsubscribe = setupNotificationListeners(
-      (notification) => {
-        console.log('📱 Notification received:', notification);
+      () => {
+        // Notification received
       },
       (response) => {
-        console.log('👆 Notification tapped:', response);
         // Handle notification tap - navigate to relevant screen
         const data = response.notification.request.content.data;
         if (data?.type === 'nft_collected') {

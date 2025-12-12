@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -75,12 +75,28 @@ export default function PersonalSpawnMarker({
   showCollectionRadius = true,
 }: PersonalSpawnMarkerProps) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [imageError, setImageError] = useState(false);
   
   const nft = spawn.nft;
   const rarity = nft?.rarity || 'common';
   const rarityColor = getRarityColor(rarity);
   const rarityLightColor = getRarityLightColor(rarity);
   const rarityIcon = getRarityIcon(rarity);
+  
+  // Check if image_url is actually an image file (not a 3D model file)
+  const isImageFile = (url: string | undefined): boolean => {
+    if (!url) return false;
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+    const lowerUrl = url.toLowerCase();
+    return imageExtensions.some(ext => lowerUrl.includes(ext));
+  };
+  
+  const shouldShowImage = nft?.image_url && (isImageFile(nft.image_url) || nft.media_type === 'image' || nft.media_type === 'video' || nft.media_type === 'gif') && !imageError;
+  
+  // Reset image error when NFT changes
+  useEffect(() => {
+    setImageError(false);
+  }, [nft?.image_url]);
   
   // Calculate distance
   const distance = getDistanceToSpawn(
@@ -178,11 +194,15 @@ export default function PersonalSpawnMarker({
             ]}
           >
             {/* NFT Image or Icon */}
-            {nft?.image_url ? (
+            {shouldShowImage ? (
               <Image
                 source={{ uri: nft.image_url }}
                 style={styles.nftImage}
                 resizeMode="cover"
+                onError={() => {
+                  console.log('Failed to load NFT image:', nft.image_url);
+                  setImageError(true);
+                }}
               />
             ) : (
               <View style={[styles.iconContainer, { backgroundColor: rarityColor }]}>

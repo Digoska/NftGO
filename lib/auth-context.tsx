@@ -18,6 +18,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<{ error: any }>;
   signInWithApple: (identityToken: string, nonce?: string) => Promise<{ error: any }>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
   refreshUserProfile: () => Promise<void>;
 }
 
@@ -30,22 +31,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('🔍 AuthProvider: Initializing...');
-    const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-    const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-    console.log('🔍 Supabase URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
-    console.log('🔍 Supabase Key:', supabaseAnonKey ? '✅ Set' : '❌ Missing');
-    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
-        console.error('❌ Error getting session:', error);
+        console.error('Error getting session:', error);
       }
-      console.log('🔍 Initial session:', session ? '✅ Found' : '❌ No session');
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        console.log('🔍 User found:', session.user.email);
         fetchUserProfile(session.user.id);
       }
       setLoading(false);
@@ -55,15 +48,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔍 Auth state changed:', event);
-      console.log('🔍 Session:', session ? '✅ Active' : '❌ No session');
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        console.log('🔍 User:', session.user.email);
         fetchUserProfile(session.user.id);
       } else {
-        console.log('🔍 No user, clearing profile');
         setUserProfile(null);
       }
       setLoading(false);
@@ -110,35 +99,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log('🔐 Attempting to sign in with email:', email);
-      const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-      const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-      console.log('🔐 Supabase URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
-      console.log('🔐 Supabase Key:', supabaseAnonKey ? '✅ Set' : '❌ Missing');
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
       if (error) {
-        console.error('❌ Sign in error:', error);
-        console.error('❌ Error message:', error.message);
-        console.error('❌ Error status:', error.status);
         return { error };
-      }
-      
-      if (data?.session) {
-        console.log('✅ Sign in successful!');
-        console.log('✅ User ID:', data.session.user.id);
-        console.log('✅ User email:', data.session.user.email);
-      } else {
-        console.warn('⚠️ Sign in returned no session');
       }
       
       return { error: null };
     } catch (error: any) {
-      console.error('❌ Sign in exception:', error);
+      console.error('Sign in error:', error);
       return { error: { message: error.message || 'Unexpected error occurred' } };
     }
   };
@@ -152,28 +124,95 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUserProfile(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (error: any) {
+      console.error('Sign out error:', error);
+    } finally {
+      // Always clear local state
+      setSession(null);
+      setUser(null);
+      setUserProfile(null);
+    }
   };
 
   const signInWithGoogle = async () => {
     try {
       // Use the app scheme for deep linking (nftgo://)
+      // In Supabase Dashboard, use: nftgo:// (or nftgo://* for wildcard)
       // This must match what's configured in Supabase Dashboard → Authentication → URL Configuration
       const redirectUrl = 'nftgo://';
       
       console.log('🔐 Google OAuth redirect URL:', redirectUrl);
+      console.log('🔐 Supabase Base URL:', Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || 'NOT SET');
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
-        },
-      });
+      // Verify Supabase client is properly configured by checking if we have URL and key
+      const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+      const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+      
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.error('❌ Supabase credentials missing for OAuth');
+        return {
+          error: {
+            message: 'Supabase is not properly configured. Please check your environment variables and rebuild the app.',
+            code: 'SUPABASE_NOT_CONFIGURED'
+          }
+        };
+      }
+      
+      let data, error;
+      try {
+        const result = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: false,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
+        data = result.data;
+        error = result.error;
+      } catch (fetchError: any) {
+        // If it's a network/fetch error, wrap it
+        if (fetchError?.name === 'TypeError' || fetchError?.message?.includes('fetch')) {
+          error = {
+            name: 'AuthRetryableFetchError',
+            message: fetchError?.message || 'Network request failed',
+            status: 0,
+          };
+        } else {
+          error = fetchError;
+        }
+      }
 
       if (error) {
-        console.error('Google OAuth error:', error);
+        // Handle network/fetch errors (status 0)
+        if (error.status === 0 || error.name === 'AuthRetryableFetchError') {
+          return {
+            error: {
+              message: 'Network error: Unable to reach authentication server. Please check your internet connection and try again.',
+              code: 'NETWORK_ERROR',
+              originalError: error.message || error.name,
+              details: 'This usually means the app cannot connect to Supabase servers, or Supabase returned an unexpected response format.'
+            }
+          };
+        }
+        
+        // Handle JSON parse errors
+        if (error.message?.includes('JSON Parse error') || error.message?.includes('Unexpected character')) {
+          return {
+            error: {
+              message: 'Server configuration error. The authentication server returned an invalid response. Please verify Supabase OAuth is properly configured in the dashboard.',
+              code: 'JSON_PARSE_ERROR',
+              originalError: error.message,
+              details: 'This usually means Supabase returned HTML or plain text instead of JSON. Check Supabase dashboard configuration.'
+            }
+          };
+        }
+        
         // If OAuth is not configured, provide helpful error
         if (error.message?.includes('missing OAuth secret') || error.message?.includes('Unsupported provider')) {
           return { 
@@ -183,6 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } 
           };
         }
+        
         return { error };
       }
 
@@ -235,16 +275,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
               } catch (e) {
                 // URL parsing failed, let Supabase handle it automatically
-                console.log('Could not parse OAuth callback URL, waiting for automatic session...');
               }
             }
           }
         }
       }
 
+      if (!data?.url) {
+        return {
+          error: {
+            message: 'Failed to get OAuth URL from authentication server. Please verify Supabase OAuth configuration.',
+            code: 'NO_OAUTH_URL'
+          }
+        };
+      }
+      
       return { error: null };
     } catch (error: any) {
-      return { error };
+      // Handle network/fetch errors
+      if (error?.status === 0 || error?.name === 'AuthRetryableFetchError' || error?.name === 'TypeError') {
+        return {
+          error: {
+            message: 'Network error: Unable to connect to authentication server. Please check your internet connection and Supabase configuration.',
+            code: 'NETWORK_ERROR',
+            originalError: error?.message || error?.name
+          }
+        };
+      }
+      
+      // Handle JSON parse errors from catch block
+      const errorMessage = error?.message || String(error);
+      if (errorMessage.includes('JSON Parse error') || errorMessage.includes('Unexpected character')) {
+        return {
+          error: {
+            message: 'Authentication server returned an invalid response. Please verify Supabase OAuth is properly configured and try again.',
+            code: 'JSON_PARSE_ERROR',
+            originalError: errorMessage
+          }
+        };
+      }
+      
+      return { 
+        error: { 
+          message: errorMessage || 'An unexpected error occurred during Google sign in',
+          code: 'UNKNOWN_ERROR'
+        } 
+      };
     }
   };
 
@@ -252,8 +328,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // Use the app scheme for deep linking (nftgo://)
       const redirectUrl = 'nftgo://';
-      
-      console.log('🔐 Apple OAuth redirect URL:', redirectUrl);
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
@@ -313,6 +387,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const redirectUrl = 'nftgo://reset-password';
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+      
+      if (error) {
+        return { error };
+      }
+      
+      return { error: null };
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      return { error: { message: error.message || 'Failed to send password reset email' } };
+    }
+  };
+
   const refreshUserProfile = async () => {
     if (user?.id) {
       await fetchUserProfile(user.id);
@@ -329,6 +422,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     signInWithGoogle,
     signInWithApple,
+    resetPassword,
     refreshUserProfile,
   };
 
