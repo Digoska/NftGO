@@ -55,8 +55,13 @@ web-build/
 
 # Environment variables
 .env
+.env.*
 .env.local
 .env.*.local
+.env.backup
+.env.bak
+*.env
+*.env.*
 
 # TypeScript
 *.tsbuildinfo
@@ -78,6 +83,11 @@ prebuild.log
 # Sensitive files
 client_secret_*.json
 *.pdf
+*secret*
+*key*.json
+*credential*
+*.p12
+*.mobileprovision
 
 # Temporary files
 Sign up/
