@@ -105,3 +105,11 @@ migration*.sql
 *.db
 *.sqlite
 *.sqlite3
+
+# API Keys and credentials
+*API_KEY*
+*api_key*
+*ApiKey*
+AIza*
+*google*.key
+*google*.json
