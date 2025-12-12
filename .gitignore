@@ -82,3 +82,7 @@ client_secret_*.json
 # Temporary files
 Sign up/
 pdf_*.pdf
+
+# Cursor AI
+.cursor/
+.cursor/worktrees.json
