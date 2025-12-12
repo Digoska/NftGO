@@ -2,20 +2,43 @@
 
 ## Exposed Credentials
 
+### 1. Supabase Credentials (FIXED)
 The `.env.backup` file was accidentally committed to git and contains Supabase credentials.
+
+### 2. Google Maps API Key (FIXED) ⚠️ URGENT
+The Google Maps API key was hardcoded in `android/app/src/main/AndroidManifest.xml` and exposed on GitHub.
 
 **What was exposed:**
 - Supabase project URL
 - Supabase anon key (public key)
+- **Google Maps API key: `REDACTED_GOOGLE_MAPS_KEY`** (for project nftgo-480915)
 
 **Status:**
 - ✅ Files removed from git tracking
+- ✅ **API key removed from all git history**
 - ✅ Updated .gitignore to prevent future commits
-- ⚠️ **Keys still in git history** - consider rotating them
+- ⚠️ **Keys still need to be rotated/revoked in Google Cloud Console**
 
 ## What to Do
 
-### 1. Rotate Supabase Keys (Recommended)
+### 1. Revoke Google Maps API Key (URGENT - Do This First!)
+
+The exposed Google Maps API key must be revoked immediately:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Select project: **NftGO (nftgo-480915)**
+3. Go to **APIs & Services** → **Credentials**
+4. Find the API key: `REDACTED_GOOGLE_MAPS_KEY`
+5. Click on it → **Delete** or **Restrict** it
+6. Create a new API key
+7. Add the new key to your `.env` file as `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`
+8. Restrict the new key to:
+   - Android package: `com.nftgo.app`
+   - Only enable: Maps SDK for Android
+
+**The old key is now removed from git history, but you still need to revoke it in Google Cloud Console!**
+
+### 2. Rotate Supabase Keys (Recommended)
 
 Even though it's the anon key (public), it's good practice to rotate it:
 
