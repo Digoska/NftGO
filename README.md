@@ -1,188 +1,103 @@
-# 🎮 NFT-GO - Location-Based NFT Collection App
+# NFT-GO
 
-<div align="center">
-
-> **Pokémon GO meets NFTs** - Collect NFTs by exploring real-world locations, build your collection, compete on leaderboards, and earn rewards!
+Location-based NFT collection app. Think Pokémon GO but for NFTs.
 
 [![React Native](https://img.shields.io/badge/React%20Native-0.81.5-61DAFB?logo=react)](https://reactnative.dev/)
 [![Expo](https://img.shields.io/badge/Expo-54.0.25-000020?logo=expo)](https://expo.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.2-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase)](https://supabase.com/)
 
-</div>
+## What it does
 
-## What is NFT-GO?
-
-NFT-GO is a mobile app that lets you collect NFTs by actually walking around your city. Think Pokémon GO, but instead of catching Pokémon, you're discovering and collecting unique digital assets at real-world locations.
-
-The idea is simple: open the app, see NFTs spawning on a map near you, walk to those locations, and collect them. Each NFT can be a 3D model, image, or video. You can trade them, level up, compete on leaderboards, and build your collection.
+You walk around your city and collect NFTs at real locations. Open the app, see NFTs on a map, walk there, collect them. Each NFT can be a 3D model, image, or video. You can trade them with other users, level up, compete on leaderboards.
 
 ## Features
 
-- 🗺️ **Location-based collection** - NFTs spawn at real GPS coordinates
-- 🎨 **3D NFT models** - Collect animated 3D models, images, and videos
-- 💱 **Trading marketplace** - Buy, sell, and exchange NFTs with other users
-- 📊 **Gamification** - Level up, earn XP, build daily streaks, compete on leaderboards
-- 🏆 **Rarity system** - Common, Rare, Epic, and Legendary NFTs
-- ⚡ **Boost system** - Some NFTs give you gameplay advantages
-- 👑 **VIP program** - Lock tokens to unlock exclusive benefits
-- 👥 **Social features** - Profiles, badges, leaderboards
+- Location-based spawning - NFTs appear at GPS coordinates
+- 3D models, images, videos
+- Trading marketplace
+- Leveling system with XP and streaks
+- Leaderboards
+- Rarity system (Common, Rare, Epic, Legendary)
+- Some NFTs give gameplay boosts
+- VIP rewards for locking tokens
 
-## Tech Stack
+## Tech
 
-Built with React Native and Expo for cross-platform support (iOS & Android).
+React Native + Expo for iOS and Android. TypeScript for types. Supabase for backend (database, auth, storage). Three.js for 3D rendering. React Native Maps for location stuff.
 
-**Frontend:**
-- React Native 0.81.5 + Expo 54
-- TypeScript for type safety
-- Expo Router for file-based routing
-- React Native Maps for location features
-- Three.js for 3D model rendering
+## Setup
 
-**Backend:**
-- Supabase (PostgreSQL database, Auth, Storage)
-- Row Level Security for data protection
-- Real-time updates
-
-**3D Rendering:**
-- expo-three + expo-gl for WebGL
-- @react-three/fiber for React integration
-- Supports GLTF/GLB models with animations
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
-- Expo CLI
-- Supabase account (free tier works)
-
-### Installation
+You'll need Node.js 18+, npm, and a Supabase account.
 
 ```bash
-# Clone the repo
 git clone https://github.com/Digoska/NftGO.git
 cd NftGO
-
-# Install dependencies
 npm install
 ```
 
-### Environment Setup
-
-Create a `.env` file in the root directory:
+Create a `.env` file:
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### Supabase Setup
+Then:
+1. Create a Supabase project
+2. Run `supabase-schema.sql` in the SQL Editor (run statements one at a time)
+3. Create storage buckets: `nfts` and `avatars` (both public)
+4. Set up OAuth in Authentication (Google, Apple)
 
-1. Create a new project on [Supabase](https://supabase.com)
-2. Run `supabase-schema.sql` in the SQL Editor (run each statement separately)
-3. Create Storage buckets:
-   - `nfts` (public)
-   - `avatars` (public)
-4. Set up OAuth providers in Authentication → Providers (Google, Apple)
-
-### Running the App
+Run it:
 
 ```bash
-# Start development server
 npm start
-
-# Run on iOS simulator
-npm run ios
-
-# Run on Android emulator
-npm run android
+npm run ios    # or npm run android
 ```
 
-## Project Structure
+## Project structure
 
 ```
-nft-go/
-├── app/                    # Expo Router screens
-│   ├── (auth)/            # Login, signup, onboarding
-│   └── (tabs)/            # Main app screens (Home, Map, Wallet, Profile)
-├── components/            # Reusable UI components
-│   ├── nft/              # NFT display components
-│   ├── home/             # Home screen components
-│   └── profile/          # Profile components
-├── lib/                   # Utilities and helpers
-│   ├── supabase.ts       # Supabase client
-│   ├── location.ts       # Location services
-│   └── collectNFT.ts     # NFT collection logic
-├── types/                 # TypeScript definitions
-└── constants/            # Colors, typography, spacing
+app/              # Screens (auth, tabs)
+components/       # UI components
+lib/              # Utilities (supabase, location, etc)
+types/            # TypeScript types
+constants/        # Colors, spacing
 ```
 
-## How It Works
+## How it works
 
-1. **Map View** - See NFTs spawning at locations near you
-2. **Collection** - Walk to locations and tap to collect NFTs
-3. **Wallet** - View your collection, filter by rarity
-4. **Trading** - Buy and sell NFTs on the marketplace
-5. **Profile** - Track stats, level, streaks, and leaderboard rank
+Map shows NFTs near you. Walk to the location, tap to collect. View your collection in the wallet, filter by rarity. Trade on the marketplace. Check your profile for stats and leaderboard rank.
 
-## Current Status
+## Current status
 
-✅ **Working:**
-- Authentication (Email, Google, Apple)
-- Location-based NFT spawning
-- Collection system with filters
-- 3D model support (GLTF format)
-- Video and image NFTs
-- Gamification (levels, XP, streaks, leaderboards)
-- User profiles and stats
+Working: auth, location spawning, collection, 3D models (GLTF), videos/images, gamification, profiles.
 
-⚠️ **Known Issues:**
-- GLB models with embedded textures don't work in Expo Go (need dev build)
-- Use GLTF format with external textures for Expo Go compatibility
+Known issues: GLB with embedded textures doesn't work in Expo Go. Use GLTF with external textures instead.
 
-## 3D Models
+## 3D models
 
-The app supports 3D NFT models in GLTF/GLB format. For Expo Go compatibility, use GLTF with external textures. See [`docs/3d-models/GLTF_UPLOAD_GUIDE.md`](./docs/3d-models/GLTF_UPLOAD_GUIDE.md) for details.
+Supports GLTF/GLB. For Expo Go, use GLTF with external textures. Check `docs/3d-models/GLTF_UPLOAD_GUIDE.md` for details.
 
-## Database Schema
+## Database
 
-Main tables:
-- `users` - User profiles
-- `nfts` - NFT definitions with location data
-- `user_nfts` - User collections (many-to-many)
-- `user_stats` - Gamification stats
-- `nft_spawns` - Active spawn events
-
-See `supabase-schema.sql` for the complete schema.
+Main tables: `users`, `nfts`, `user_nfts`, `user_stats`, `nft_spawns`. Full schema in `supabase-schema.sql`.
 
 ## Contributing
 
-This is a hackathon project, but feel free to fork and build on it! Check out [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) for guidelines.
+Hackathon project, but feel free to fork it. See `docs/CONTRIBUTING.md` if you want to contribute.
 
-## Documentation
+## Docs
 
-All documentation is in the `docs/` folder:
-- Setup guides
-- 3D model guides
-- API documentation
-- Troubleshooting
+Everything's in the `docs/` folder - setup guides, 3D model stuff, API docs, troubleshooting.
 
 ## License
 
 MIT
 
-## Built For
-
-This project was built for [Hackathon Name] - a location-based NFT collection platform that combines real-world exploration with blockchain technology.
-
 ---
 
-<div align="center">
+Built for a hackathon. Location-based NFT collection that combines real-world exploration with blockchain.
 
-**Built by Digo**
-
-[![GitHub](https://img.shields.io/badge/GitHub-Digoska%2FNftGO-181717?logo=github)](https://github.com/Digoska/NftGO)
-
-</div>
+[GitHub](https://github.com/Digoska/NftGO)
