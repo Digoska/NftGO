@@ -21,8 +21,7 @@ import Button from '../../components/common/Button';
 import CodeInput from '../../components/auth/CodeInput';
 import PasswordStrength from '../../components/auth/PasswordStrength';
 import SocialButton from '../../components/common/SocialButton';
-import WalletButton from '../../components/common/WalletButton';
-import { GoogleIcon, FacebookIcon } from '../../components/common/Icons';
+import { GoogleIcon } from '../../components/common/Icons';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
@@ -452,40 +451,12 @@ export default function SignupScreen() {
             </View>
 
             <SocialButton
-              title="Continue with Facebook"
-              onPress={() => {}}
-              loading={false}
-              icon={<FacebookIcon />}
-              style={styles.socialButton}
-              disabled={!agreedToTerms}
-            />
-            <SocialButton
               title="Continue with Google"
               onPress={handleGoogleLogin}
               loading={loading}
               icon={<GoogleIcon />}
               style={styles.socialButton}
               disabled={!agreedToTerms}
-            />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <WalletButton
-              onSuccess={(address) => {
-                if (!agreedToTerms) {
-                  setEmailError('Please agree to Terms of Service and Privacy Policy');
-                  return;
-                }
-                console.log('Wallet connected:', address);
-                router.replace('/(tabs)');
-              }}
-              onError={(error) => {
-                console.error('Wallet error:', error);
-              }}
             />
           </View>
         );

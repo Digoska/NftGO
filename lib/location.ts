@@ -4,18 +4,10 @@ import { Location as LocationType } from '../types';
 
 export async function requestLocationPermissions(): Promise<boolean> {
   try {
-    // Check if we're in Expo Go (limited location support)
-    const isExpoGo = Constants.appOwnership === 'expo';
-    
-    if (isExpoGo) {
-      console.warn('⚠️ Location permissions in Expo Go are limited. Use development build for full functionality.');
-    }
-
     // Request foreground permissions first
     const { status } = await Location.requestForegroundPermissionsAsync();
     
     if (status !== 'granted') {
-      console.warn('Location permission not granted:', status);
       return false;
     }
 
@@ -27,11 +19,9 @@ export async function requestLocationPermissions(): Promise<boolean> {
         return true;
       }
       // If background is denied but foreground is granted, that's okay
-      console.log('Background location permission not granted, but foreground is available');
       return true;
     } catch (bgError) {
       // Background permissions might not be available (e.g., in Expo Go)
-      console.log('Background location permission not available, using foreground only');
       return true; // Foreground permission is enough for basic functionality
     }
   } catch (error: any) {

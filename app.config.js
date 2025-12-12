@@ -80,6 +80,7 @@ module.exports = {
           buttonStyle: 'dark',
         },
       ],
+      './plugins/withSupabaseConfig.js',
     ],
   },
 };
