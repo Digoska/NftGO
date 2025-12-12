@@ -37,7 +37,7 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>GMSApiKey</key>
-    <string>YOUR_GOOGLE_MAPS_API_KEY</string>
+    <string/>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
@@ -67,6 +67,10 @@
     </array>
     <key>RCTNewArchEnabled</key>
     <true/>
+    <key>SupabaseAnonKey</key>
+    <string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrcGd1cGRvcmJnY3RobWpveWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNzQ5ODgsImV4cCI6MjA3OTc1MDk4OH0.Fe2h0WOODk3CECn1ucaV74TcILRJwZnnZHSoL40da5Q</string>
+    <key>SupabaseURL</key>
+    <string>https://wkpgupdorbgcthmjoybe.supabase.co</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

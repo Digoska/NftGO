@@ -176,7 +176,6 @@ async function createUserNFT(
           return null;
         }
         
-        console.log('✅ NFT collected successfully (without spawn_id due to FK constraint)');
         return retryData as UserNFT;
       }
       
@@ -249,8 +248,6 @@ export async function collectPersonalNFT(
     
     // Get the NFT details for the response
     const nft = spawn.nft as NFT;
-    
-    console.log(`User ${userId} collected NFT: ${nft.name} (${nft.rarity})`);
     
     return {
       success: true,

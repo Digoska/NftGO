@@ -8,7 +8,9 @@ import {
   Image,
   Alert,
   Linking,
+  Switch,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'expo-router';
@@ -20,6 +22,7 @@ import { spacing } from '../../constants/spacing';
 import Button from '../../components/common/Button';
 import BadgeList from '../../components/profile/BadgeList';
 import UserProfileModal from '../../components/profile/UserProfileModal';
+import { getEmailBlurPreference, setEmailBlurPreference, blurEmail } from '../../lib/emailBlur';
 
 export default function ProfileScreen() {
   const { user, userProfile, signOut } = useAuth();
@@ -28,13 +31,25 @@ export default function ProfileScreen() {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [emailBlurred, setEmailBlurred] = useState(false);
 
   useEffect(() => {
     if (user) {
       fetchStats();
       fetchBadges();
+      loadEmailBlurPreference();
     }
   }, [user]);
+
+  const loadEmailBlurPreference = async () => {
+    const blurred = await getEmailBlurPreference();
+    setEmailBlurred(blurred);
+  };
+
+  const handleEmailBlurToggle = async (value: boolean) => {
+    setEmailBlurred(value);
+    await setEmailBlurPreference(value);
+  };
 
   const fetchStats = async () => {
     try {
@@ -122,7 +137,18 @@ export default function ProfileScreen() {
           text: 'Log Out',
           style: 'destructive',
           onPress: async () => {
-            await signOut();
+            try {
+              await signOut();
+              // Navigate to login screen after sign out
+              // Small delay to ensure state is cleared
+              setTimeout(() => {
+                router.replace('/(auth)/login');
+              }, 100);
+            } catch (error) {
+              // Even if there's an error, try to navigate anyway
+              console.error('Logout error:', error);
+              router.replace('/(auth)/login');
+            }
           },
         },
       ]
@@ -130,9 +156,10 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      {/* Header Section with Gradient Background */}
-      <View style={styles.headerContainer}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Header Section with Gradient Background */}
+        <View style={styles.headerContainer}>
         <View style={styles.header}>
           <View style={styles.profileSection}>
             <View style={styles.avatarContainer}>
@@ -151,10 +178,12 @@ export default function ProfileScreen() {
               </View>
             </View>
             <View style={styles.profileInfo}>
+              <Text style={styles.profileEmail}>
+                {emailBlurred ? blurEmail(user?.email) : user?.email}
+              </Text>
               <Text style={styles.profileName}>
                 {userProfile?.full_name || 'User'}
               </Text>
-              <Text style={styles.profileEmail}>{user?.email}</Text>
               {userProfile?.x_username && (
                 <TouchableOpacity
                   style={styles.xLink}
@@ -266,6 +295,18 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Settings</Text>
         </View>
         <View style={styles.settingsList}>
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
+              <Text style={styles.settingText}>Blur Email</Text>
+            </View>
+            <Switch
+              value={emailBlurred}
+              onValueChange={handleEmailBlurToggle}
+              trackColor={{ false: colors.border, true: colors.primary + '40' }}
+              thumbColor={emailBlurred ? colors.primary : colors.textMuted}
+            />
+          </View>
           <TouchableOpacity
             style={styles.settingItem}
             onPress={() => router.push('/(tabs)/settings')}
@@ -325,7 +366,8 @@ export default function ProfileScreen() {
           isOwnProfile={true}
         />
       )}
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -334,12 +376,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     paddingBottom: spacing.xl,
   },
   headerContainer: {
     backgroundColor: colors.backgroundLight,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
     borderBottomLeftRadius: 24,
