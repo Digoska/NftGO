@@ -302,6 +302,30 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {/* Location Testing Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="bug-outline" size={20} color={colors.primary} />
+            <Text style={styles.sectionTitle}>Testing & Debug</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => router.push('/(tabs)/location-test')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="location-outline" size={20} color={colors.text} />
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingText}>Test GPS Location</Text>
+                <Text style={styles.settingSubtext}>
+                  Test location functionality and simulate GPS coordinates
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.saveButtonContainer}>
           <Button
             title="Save Settings"

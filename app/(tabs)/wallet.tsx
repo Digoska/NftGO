@@ -11,7 +11,9 @@ import {
   Animated,
   RefreshControl,
   Dimensions,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
@@ -23,6 +25,7 @@ import VideoNFT from '../../components/nft/VideoNFT';
 import WebViewModel from '../../components/nft/WebViewModel';
 import CachedImage from '../../components/nft/CachedImage';
 import { preCacheFiles } from '../../lib/nftCache';
+import { getEmailBlurPreference, blurEmail } from '../../lib/emailBlur';
 
 const { width } = Dimensions.get('window');
 
@@ -42,12 +45,20 @@ export default function WalletScreen() {
   const [filter, setFilter] = useState<'all' | 'common' | 'rare' | 'epic' | 'legendary'>('all');
   const [fadeAnim] = useState(new Animated.Value(0));
   const [listOpacity] = useState(new Animated.Value(1));
+  const [emailBlurred, setEmailBlurred] = useState(false);
+  const { userProfile } = useAuth();
 
   useEffect(() => {
     if (user) {
       fetchUserNFTs();
+      loadEmailBlurPreference();
     }
   }, [user]);
+
+  const loadEmailBlurPreference = async () => {
+    const blurred = await getEmailBlurPreference();
+    setEmailBlurred(blurred);
+  };
 
   // Animate filter change
   useEffect(() => {
@@ -169,6 +180,27 @@ export default function WalletScreen() {
 
   const ListHeaderComponent = () => (
     <View style={styles.headerContainer}>
+      {/* Profile Section */}
+      <View style={styles.profileSection}>
+        <View style={styles.avatarContainer}>
+          {userProfile?.avatar_url ? (
+            <Image source={{ uri: userProfile.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatarPlaceholder, { backgroundColor: '#E5E7EB' }]}>
+              <Ionicons name="person" size={30} color="#9CA3AF" />
+            </View>
+          )}
+        </View>
+        <View style={styles.profileInfo}>
+          <Text style={styles.profileEmail}>
+            {emailBlurred ? blurEmail(user?.email) : user?.email}
+          </Text>
+          <Text style={styles.profileName}>
+            {userProfile?.full_name || 'User'}
+          </Text>
+        </View>
+      </View>
+
       {/* Title Section */}
       <View style={styles.titleSection}>
         <Text style={styles.title}>My Wallet</Text>
@@ -233,15 +265,17 @@ export default function WalletScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading wallet...</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading wallet...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {filteredNFTs.length === 0 ? (
         <>
           <ListHeaderComponent />
@@ -350,7 +384,7 @@ export default function WalletScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -500,8 +534,48 @@ const styles = StyleSheet.create({
   },
   // Header
   headerContainer: {
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     backgroundColor: colors.background,
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  avatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileEmail: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  profileName: {
+    ...typography.bodyBold,
+    color: colors.text,
+    fontSize: 16,
   },
   titleSection: {
     paddingHorizontal: spacing.md,
