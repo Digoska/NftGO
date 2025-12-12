@@ -1,72 +1,77 @@
-# 🤝 Contributing to NftGO
+# Contributing
 
-## Pre Cursor AI / Vývojárov
+This is a hackathon project, but if you want to fork it or contribute, here's what you need to know.
 
-### Kontext Projektu
+## Project Overview
 
-**NftGO** je location-based NFT collection aplikácia podobná Pokémon GO. Používatelia zbierajú NFT na základe geolokácie, budujú kolekcie a súťažia na leaderboarde.
+NFT-GO is a location-based NFT collection app. Users collect NFTs by walking to real GPS locations. It's like Pokémon GO but for NFTs.
 
-### Aktuálny Status
+## Current Status
 
-- ✅ **Základné funkcie** - fungujú
-- ✅ **Autentifikácia** - funguje
-- ✅ **NFT Collection** - funguje
-- ✅ **3D modely (GLTF)** - fungujú s externými textúrami
-- ⚠️ **3D modely (GLB)** - nefungujú v Expo Go (potrebuje dev build)
+What works:
+- Authentication (Email, Google, Apple)
+- Location-based NFT spawning
+- Collection system
+- 3D models (GLTF format with external textures)
+- Videos and images
+- Gamification (levels, XP, streaks, leaderboards)
 
-### Kľúčové Súbory
+Known issues:
+- GLB models with embedded textures don't work in Expo Go (need dev build)
+- Use GLTF with external textures for Expo Go compatibility
 
-- `app/_layout.tsx` - Root layout, Blob polyfill setup
+## Key Files
+
+- `app/_layout.tsx` - Root layout
 - `components/nft/ModelNFT.tsx` - 3D model renderer
-- `app/(tabs)/wallet.tsx` - NFT collection screen
+- `app/(tabs)/wallet.tsx` - Collection screen
+- `app/(tabs)/map.tsx` - Map with NFT spawns
 - `lib/supabase.ts` - Supabase client
+- `lib/collectNFT.ts` - Collection logic
 - `supabase-schema.sql` - Database schema
 
-### Časté Problémy
+## Common Issues
 
-1. **GLB textúry sa nenačítajú**
-   - **Riešenie:** Použi GLTF s externými textúrami
-   - **Pozri:** `GLTF_UPLOAD_GUIDE.md`
+**GLB textures don't load:**
+- Use GLTF with external textures instead
+- See `docs/3d-models/GLTF_UPLOAD_GUIDE.md`
 
-2. **expo-blob nefunguje**
-   - **Dôvod:** Vyžaduje native moduly (nefunguje v Expo Go)
-   - **Riešenie:** Development build alebo GLTF s externými textúrami
+**expo-blob doesn't work:**
+- Requires native modules (doesn't work in Expo Go)
+- Use development build or GLTF with external textures
 
-3. **NFT sa nezobrazujú**
-   - Skontroluj `media_type` v databáze (`'image'`, `'video'`, `'model'`)
-   - Skontroluj `image_url` - musí byť validný URL
-   - Pre GLTF: URL musí ukazovať na `.gltf` súbor
+**NFTs don't show:**
+- Check `media_type` in database (`'image'`, `'video'`, `'model'`)
+- Check `image_url` - must be valid URL
+- For GLTF: URL must point to `.gltf` file
 
-### Development Workflow
+## Development
 
-1. **Setup**
-   ```bash
-   npm install
-   # Vytvor .env súbor
-   npm start
-   ```
+Setup:
+```bash
+npm install
+# Create .env file with Supabase credentials
+npm start
+```
 
-2. **Database Changes**
-   - Vytvor migration markdown súbor
-   - Spusti SQL v Supabase SQL Editor (každý príkaz samostatne!)
-   - Aktualizuj `supabase-schema.sql` ak je potrebné
+Database changes:
+- Create migration markdown file in `docs/migrations/`
+- Run SQL in Supabase SQL Editor (one statement at a time)
+- Update `supabase-schema.sql` if needed
 
-3. **Testing**
-   - Testuj v Expo Go (ak je to možné)
-   - Pre 3D modely: použij GLTF s externými textúrami
-   - Pre native features: použij development build
+Testing:
+- Test in Expo Go when possible
+- For 3D models: use GLTF with external textures
+- For native features: use development build
 
-### Code Style
+## Code Style
 
-- TypeScript s strict mode
-- Functional components s hooks
+- TypeScript with strict mode
+- Functional components with hooks
 - Expo Router file-based routing
-- Supabase pre backend
-- React Context pre global state
+- Supabase for backend
+- React Context for global state
 
----
+## Getting Help
 
-**Pozri:** `README.md` pre detailnejšie informácie
-
-
-
+Check `README.md` for setup instructions. All docs are in the `docs/` folder.
