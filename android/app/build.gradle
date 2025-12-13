@@ -96,6 +96,17 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        
+        // Load properties from local.properties if available
+        Properties properties = new Properties()
+        if (project.rootProject.file('local.properties').exists()) {
+            properties.load(project.rootProject.file('local.properties').newDataInputStream())
+        }
+        
+        // Use key from local.properties, or env var, or placeholder
+        def googleMapsApiKey = properties.getProperty('GOOGLE_MAPS_API_KEY') ?: System.getenv('GOOGLE_MAPS_API_KEY') ?: "AIzaSy_Placeholder_For_Build"
+        
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
     }
     signingConfigs {
         debug {

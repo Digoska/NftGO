@@ -68,9 +68,9 @@
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>SupabaseAnonKey</key>
-    <string>REDACTED_ANON_KEY</string>
+    <string>YOUR_SUPABASE_ANON_KEY</string>
     <key>SupabaseURL</key>
-    <string>https://REDACTED_SUPABASE_URL</string>
+    <string>YOUR_SUPABASE_URL</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
