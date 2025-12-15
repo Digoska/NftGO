@@ -11,9 +11,7 @@ import {
   Animated,
   RefreshControl,
   Dimensions,
-  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
@@ -25,7 +23,6 @@ import VideoNFT from '../../components/nft/VideoNFT';
 import WebViewModel from '../../components/nft/WebViewModel';
 import CachedImage from '../../components/nft/CachedImage';
 import { preCacheFiles } from '../../lib/nftCache';
-import { getEmailBlurPreference, blurEmail } from '../../lib/emailBlur';
 
 const { width } = Dimensions.get('window');
 
@@ -45,20 +42,13 @@ export default function WalletScreen() {
   const [filter, setFilter] = useState<'all' | 'common' | 'rare' | 'epic' | 'legendary'>('all');
   const [fadeAnim] = useState(new Animated.Value(0));
   const [listOpacity] = useState(new Animated.Value(1));
-  const [emailBlurred, setEmailBlurred] = useState(false);
-  const { userProfile } = useAuth();
+
 
   useEffect(() => {
     if (user) {
       fetchUserNFTs();
-      loadEmailBlurPreference();
     }
   }, [user]);
-
-  const loadEmailBlurPreference = async () => {
-    const blurred = await getEmailBlurPreference();
-    setEmailBlurred(blurred);
-  };
 
   // Animate filter change
   useEffect(() => {
@@ -180,27 +170,6 @@ export default function WalletScreen() {
 
   const ListHeaderComponent = () => (
     <View style={styles.headerContainer}>
-      {/* Profile Section */}
-      <View style={styles.profileSection}>
-        <View style={styles.avatarContainer}>
-          {userProfile?.avatar_url ? (
-            <Image source={{ uri: userProfile.avatar_url }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: '#E5E7EB' }]}>
-              <Ionicons name="person" size={30} color="#9CA3AF" />
-            </View>
-          )}
-        </View>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileEmail}>
-            {emailBlurred ? blurEmail(user?.email) : user?.email}
-          </Text>
-          <Text style={styles.profileName}>
-            {userProfile?.full_name || 'User'}
-          </Text>
-        </View>
-      </View>
-
       {/* Title Section */}
       <View style={styles.titleSection}>
         <Text style={styles.title}>My Wallet</Text>
@@ -265,17 +234,15 @@ export default function WalletScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading wallet...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading wallet...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       {filteredNFTs.length === 0 ? (
         <>
           <ListHeaderComponent />
@@ -299,8 +266,15 @@ export default function WalletScreen() {
                 colors={[colors.primary]}
               />
             }
+            // Optimize grid rendering
+            windowSize={5} 
+            initialNumToRender={8}
+            maxToRenderPerBatch={4}
+            removeClippedSubviews={true} 
+            
             renderItem={({ item, index }) => {
               if (!item.nft) return null;
+              
               return (
                 <NFTCard
                   nft={item.nft}
@@ -384,7 +358,7 @@ export default function WalletScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -450,6 +424,41 @@ function NFTCard({
     }).start();
   }, []);
 
+  // Log to debug thumbnail loading
+  console.log('Rendering NFT:', nft.name, 'thumbnail:', nft.thumbnail_url);
+
+  // Determine content to render
+  const renderContent = () => {
+    // 1. Priority: Thumbnail (always static image)
+    if (nft.thumbnail_url) {
+      return (
+        <CachedImage
+          uri={nft.thumbnail_url}
+          style={styles.nftImage}
+          resizeMode="cover"
+        />
+      );
+    }
+    
+    // 2. Fallback: Original image (only if it's an image type)
+    if ((!nft.media_type || nft.media_type === 'image') && nft.image_url) {
+      return (
+        <CachedImage
+          uri={nft.image_url}
+          style={styles.nftImage}
+          resizeMode="cover"
+        />
+      );
+    }
+
+    // 3. Fallback: Placeholder icon (for models/videos without thumbnail)
+    return (
+      <View style={[styles.nftImagePlaceholder, { backgroundColor: getRarityColor(nft.rarity) + '15' }]}>
+        <Ionicons name="image-outline" size={32} color={getRarityColor(nft.rarity)} />
+      </View>
+    );
+  };
+
   return (
     <Animated.View style={[{ opacity, width: CARD_WIDTH }]}>
       <TouchableOpacity
@@ -459,30 +468,7 @@ function NFTCard({
       >
         {/* Image Section */}
         <View style={[styles.nftImageContainer, { backgroundColor: '#F3F4F6' }]}>
-          {nft.image_url ? (
-            nft.media_type === 'video' ? (
-              <VideoNFT
-                uri={nft.image_url}
-                style={styles.nftImage}
-                autoPlay={false}
-                loop={false}
-              />
-            ) : nft.media_type === 'model' ? (
-              <View style={{ height: '100%', width: '100%' }}>
-                <WebViewModel uri={nft.image_url} />
-              </View>
-            ) : (
-              <CachedImage
-                uri={nft.image_url}
-                style={styles.nftImage}
-                resizeMode="cover"
-              />
-            )
-          ) : (
-            <View style={[styles.nftImagePlaceholder, { backgroundColor: getRarityColor(nft.rarity) + '15' }]}>
-              <Ionicons name="image-outline" size={32} color={getRarityColor(nft.rarity)} />
-            </View>
-          )}
+          {renderContent()}
           
           {/* Rarity Tag */}
           <View style={[styles.rarityTag, { backgroundColor: getRarityColor(nft.rarity) }]}>
@@ -534,48 +520,8 @@ const styles = StyleSheet.create({
   },
   // Header
   headerContainer: {
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
     backgroundColor: colors.background,
-  },
-  profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.md,
-  },
-  avatarContainer: {
-    position: 'relative',
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  profileEmail: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  profileName: {
-    ...typography.bodyBold,
-    color: colors.text,
-    fontSize: 16,
   },
   titleSection: {
     paddingHorizontal: spacing.md,
@@ -719,6 +665,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
+  },
+  typeIcon: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   nftInfo: {
     padding: spacing.md,
