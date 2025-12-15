@@ -73,6 +73,10 @@ web-build/
 # Uncomment if you want to ignore all docs except README
 # docs/
 
+# Scripts artifacts
+scripts/thumbnails/
+scripts/temp_glb/
+
 # Test assets (large files)
 assets/test/
 
