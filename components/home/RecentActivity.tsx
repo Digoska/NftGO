@@ -1,12 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserNFT } from '../../types';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
-import VideoNFT from '../nft/VideoNFT';
-import WebViewModel from '../nft/WebViewModel';
+import CachedImage from '../nft/CachedImage';
 
 interface RecentActivityProps {
   recentNFTs: UserNFT[];
@@ -76,23 +75,13 @@ export default function RecentActivity({
             activeOpacity={0.7}
           >
             <View style={styles.imageContainer}>
-              {nft.image_url ? (
-                nft.media_type === 'video' ? (
-                  <VideoNFT
-                    uri={nft.image_url}
-                    style={styles.image}
-                    autoPlay={true}
-                    loop={true}
-                  />
-                ) : nft.media_type === 'model' ? (
-                  <View style={{ height: 100, width: '100%' }}>
-                    <WebViewModel
-                      uri={nft.image_url}
-                    />
-                  </View>
-                ) : (
-                  <Image source={{ uri: nft.image_url }} style={styles.image} resizeMode="cover" />
-                )
+              {/* Prioritize thumbnail, fallback to image_url ONLY if it's an image type */}
+              {(nft.thumbnail_url || (nft.media_type === 'image' && nft.image_url)) ? (
+                <CachedImage
+                  uri={nft.thumbnail_url || nft.image_url}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
               ) : (
                 <View
                   style={[

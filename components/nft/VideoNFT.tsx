@@ -9,17 +9,26 @@ interface VideoNFTProps {
   style?: any;
   autoPlay?: boolean;
   loop?: boolean;
+  isMuted?: boolean;
+  showControls?: boolean;
 }
 
 export default function VideoNFT({ 
   uri, 
   style, 
   autoPlay = true, 
-  loop = true 
+  loop = true,
+  isMuted: initialMuted = true,
+  showControls = true
 }: VideoNFTProps) {
   const videoRef = useRef<Video>(null);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(initialMuted);
+
+  // Update playback state if autoPlay prop changes (e.g. scrolling)
+  React.useEffect(() => {
+    setIsPlaying(autoPlay);
+  }, [autoPlay]);
 
   const togglePlayback = async () => {
     if (videoRef.current) {
@@ -39,33 +48,37 @@ export default function VideoNFT({
         source={{ uri }}
         style={styles.video}
         resizeMode={ResizeMode.COVER}
-        shouldPlay={autoPlay}
+        shouldPlay={isPlaying}
         isLooping={loop}
         isMuted={isMuted}
         useNativeControls={false}
       />
-      <TouchableOpacity
-        style={styles.playButton}
-        onPress={togglePlayback}
-        activeOpacity={0.7}
-      >
-        <Ionicons
-          name={isPlaying ? 'pause' : 'play'}
-          size={24}
-          color={colors.background}
-        />
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.muteButton}
-        onPress={() => setIsMuted(!isMuted)}
-        activeOpacity={0.7}
-      >
-        <Ionicons
-          name={isMuted ? 'volume-mute' : 'volume-high'}
-          size={20}
-          color={colors.background}
-        />
-      </TouchableOpacity>
+      {showControls && (
+        <>
+          <TouchableOpacity
+            style={styles.playButton}
+            onPress={togglePlayback}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isPlaying ? 'pause' : 'play'}
+              size={24}
+              color={colors.background}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.muteButton}
+            onPress={() => setIsMuted(!isMuted)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isMuted ? 'volume-mute' : 'volume-high'}
+              size={20}
+              color={colors.background}
+            />
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }

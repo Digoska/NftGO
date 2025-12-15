@@ -9,9 +9,10 @@ interface WebViewModelProps {
   uri: string;
   poster?: string;
   autoRotate?: boolean;
+  isStatic?: boolean;
 }
 
-export default function WebViewModel({ uri, poster, autoRotate = true }: WebViewModelProps) {
+export default function WebViewModel({ uri, poster, autoRotate = true, isStatic = false }: WebViewModelProps) {
   const [loading, setLoading] = useState(true);
   const [modelSrc, setModelSrc] = useState<string | null>(null);
   const [statusText, setStatusText] = useState('Initializing...');
@@ -74,6 +75,7 @@ export default function WebViewModel({ uri, poster, autoRotate = true }: WebView
 
   // Google <model-viewer> HTML content
   // Note: camera-controls removed and pointer-events: none added to disable interaction
+  // Optimized for grid display when isStatic is true
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -94,12 +96,15 @@ export default function WebViewModel({ uri, poster, autoRotate = true }: WebView
       <body>
         <model-viewer
           src="${modelSrc || ''}"
-          auto-rotate="${autoRotate}"
-          autoplay
-          shadow-intensity="1"
-          camera-orbit="45deg 55deg 150%"
+          auto-rotate="${isStatic ? 'false' : autoRotate}"
+          autoplay="${!isStatic}"
+          shadow-intensity="${isStatic ? '0' : '1'}"
+          camera-orbit="${isStatic ? '45deg 55deg 150%' : 'auto'}"
           disable-zoom
           interaction-prompt="none"
+          environment-image="neutral"
+          loading="eager"
+          reveal="auto"
         >
         </model-viewer>
       </body>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { spacing } from '../../constants/spacing';
 import { PersonalSpawn, Location } from '../../types';
 import { getDistanceToSpawn, formatDistance } from '../../lib/collectNFT';
 import { SPAWN_CONFIG } from '../../lib/spawnGenerator';
+import CachedImage from '../nft/CachedImage';
 
 interface PersonalSpawnMarkerProps {
   spawn: PersonalSpawn;
@@ -75,28 +76,12 @@ export default function PersonalSpawnMarker({
   showCollectionRadius = true,
 }: PersonalSpawnMarkerProps) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const [imageError, setImageError] = useState(false);
   
   const nft = spawn.nft;
   const rarity = nft?.rarity || 'common';
   const rarityColor = getRarityColor(rarity);
   const rarityLightColor = getRarityLightColor(rarity);
   const rarityIcon = getRarityIcon(rarity);
-  
-  // Check if image_url is actually an image file (not a 3D model file)
-  const isImageFile = (url: string | undefined): boolean => {
-    if (!url) return false;
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
-    const lowerUrl = url.toLowerCase();
-    return imageExtensions.some(ext => lowerUrl.includes(ext));
-  };
-  
-  const shouldShowImage = nft?.image_url && (isImageFile(nft.image_url) || nft.media_type === 'image' || nft.media_type === 'video' || nft.media_type === 'gif') && !imageError;
-  
-  // Reset image error when NFT changes
-  useEffect(() => {
-    setImageError(false);
-  }, [nft?.image_url]);
   
   // Calculate distance
   const distance = getDistanceToSpawn(
@@ -193,16 +178,12 @@ export default function PersonalSpawnMarker({
               },
             ]}
           >
-            {/* NFT Image or Icon */}
-            {shouldShowImage ? (
-              <Image
-                source={{ uri: nft.image_url }}
+            {/* NFT Image or Icon - Prioritize thumbnail */}
+            {(nft?.thumbnail_url || (nft?.media_type === 'image' && nft?.image_url)) ? (
+              <CachedImage
+                uri={nft.thumbnail_url || nft.image_url}
                 style={styles.nftImage}
                 resizeMode="cover"
-                onError={() => {
-                  console.log('Failed to load NFT image:', nft.image_url);
-                  setImageError(true);
-                }}
               />
             ) : (
               <View style={[styles.iconContainer, { backgroundColor: rarityColor }]}>
@@ -256,12 +237,16 @@ export function SpawnCallout({
   return (
     <View style={styles.calloutContainer}>
       <View style={styles.calloutHeader}>
-        {nft?.image_url && (
-          <Image
-            source={{ uri: nft.image_url }}
+        {(nft?.thumbnail_url || (nft?.media_type === 'image' && nft?.image_url)) ? (
+          <CachedImage
+            uri={nft.thumbnail_url || nft.image_url}
             style={styles.calloutImage}
             resizeMode="cover"
           />
+        ) : (
+          <View style={[styles.calloutImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+            <Ionicons name="cube" size={20} color={rarityColor} />
+          </View>
         )}
         <View style={styles.calloutInfo}>
           <Text style={styles.calloutTitle} numberOfLines={1}>
