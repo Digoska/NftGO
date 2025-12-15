@@ -2,6 +2,16 @@
 
 Všetka dokumentácia projektu je organizovaná do kategórií pre ľahšiu navigáciu.
 
+> **📑 For a complete index of all documentation files, see [INDEX.md](./INDEX.md)**
+
+---
+
+## 🗂️ Quick Links
+
+- **[INDEX.md](./INDEX.md)** - Complete index of all documentation files
+- **[PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)** - Project structure and file organization
+- **[quick-reference/QUICK_START.md](./quick-reference/QUICK_START.md)** - Quick start guide
+
 ## 📁 Štruktúra Dokumentácie
 
 ### 🚀 [Setup Guides](./setup/)
