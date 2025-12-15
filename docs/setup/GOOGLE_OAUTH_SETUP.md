@@ -4,8 +4,8 @@
 
 ✅ **You already have your Google OAuth credentials!**
 
-- **Client ID**: `823161628768-bhqc988srlk3khfom66i2v8727lf041l.apps.googleusercontent.com`
-- **Client Secret**: `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`
+- **Client ID**: `YOUR_CLIENT_ID.apps.googleusercontent.com` (replace with your actual Client ID)
+- **Client Secret**: `YOUR_CLIENT_SECRET` (replace with your actual Client Secret)
 - **Project ID**: `nftgo-479510`
 
 ## Step-by-Step Setup in Supabase
@@ -23,11 +23,11 @@
 3. Enter your credentials:
    - **Client ID (for OAuth)**: 
      ```
-     823161628768-bhqc988srlk3khfom66i2v8727lf041l.apps.googleusercontent.com
+     YOUR_CLIENT_ID.apps.googleusercontent.com
      ```
    - **Client Secret (for OAuth)**: 
      ```
-     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
+     YOUR_CLIENT_SECRET
      ```
 
 ### Step 3: Add Redirect URL in Google Cloud Console
@@ -38,7 +38,7 @@
 4. Click on your OAuth 2.0 Client ID
 5. Under **Authorized redirect URIs**, click **+ ADD URI** and add:
    ```
-   https://wkpgupdorbgcthmjoybe.supabase.co/auth/v1/callback
+   https://your-project.supabase.co/auth/v1/callback
    ```
 6. Click **SAVE**
 
@@ -52,7 +52,7 @@
 
 ✅ **Your Supabase callback URL:**
 ```
-https://wkpgupdorbgcthmjoybe.supabase.co/auth/v1/callback
+https://your-project.supabase.co/auth/v1/callback
 ```
 
 Make sure this exact URL is added to Google Cloud Console!

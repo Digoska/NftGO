@@ -1,7 +1,7 @@
 # Change Google Sign In Dialog Name
 
 ## Problem
-When signing in with Google, the dialog shows "Sign in to continue to wkpgupdorbgcthmjoybe.supabase.co" instead of your app name.
+When signing in with Google, the dialog shows "Sign in to continue to your-project.supabase.co" instead of your app name.
 
 ## Solution: Update Google OAuth Consent Screen
 
@@ -35,7 +35,7 @@ The name shown in the Google Sign In dialog comes from your **Google Cloud Conso
 ### What Will Change:
 
 **Before:**
-- Dialog shows: "Sign in to continue to wkpgupdorbgcthmjoybe.supabase.co"
+- Dialog shows: "Sign in to continue to your-project.supabase.co"
 
 **After:**
 - Dialog shows: "Sign in to continue to NftGO" (or your app name)
@@ -55,7 +55,7 @@ The name shown in the Google Sign In dialog comes from your **Google Cloud Conso
 
 ## Note
 
-- The Supabase URL (`wkpgupdorbgcthmjoybe.supabase.co`) will still be in the OAuth callback flow, but the **user-facing dialog** will show your app name
+- The Supabase URL (`your-project.supabase.co`) will still be in the OAuth callback flow, but the **user-facing dialog** will show your app name
 - For production apps, Google requires Privacy Policy and Terms of Service URLs
 - Changes may take a few minutes to appear in the sign-in dialog
 
