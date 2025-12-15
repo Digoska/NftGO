@@ -1,7 +1,15 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://REDACTED_SUPABASE_URL';
-const SUPABASE_KEY = 'REDACTED_ANON_KEY';
+require('dotenv').config();
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('ERROR: Missing environment variables!');
+  console.error('Make sure .env file exists with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 

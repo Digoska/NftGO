@@ -47,7 +47,7 @@ Your iPhone might not be able to reach Supabase servers.
 
 **Test:**
 1. Open Safari on iPhone
-2. Navigate to: `https://REDACTED_SUPABASE_URL`
+2. Navigate to: `https://your-project.supabase.co`
 3. Should load without errors
 
 **If it fails:**
@@ -92,8 +92,8 @@ Run the app and check Xcode console for these logs:
 
 ```
 🔧 Supabase Config:
-  URL: https://REDACTED_SUPABASE_URL...
-  Key: eyJhbGciOiJIUzI1NiIs...
+  URL: https://your-project.supabase.co...
+  Key: eyJhbGciOiJIUzI1NiIs... (your anon key)
   Platform: ios
   From Info.plist: Yes
 ```
@@ -104,7 +104,7 @@ If you see `❌ MISSING`, rebuild with prebuild.
 
 **On your iPhone:**
 1. Open Safari
-2. Go to: `https://REDACTED_SUPABASE_URL`
+2. Go to: `https://your-project.supabase.co`
 3. Should load (might show API docs or error, but should connect)
 
 **If it doesn't load:**
@@ -116,8 +116,8 @@ If you see `❌ MISSING`, rebuild with prebuild.
 
 1. **Supabase Dashboard** → **Authentication** → **Providers** → **Google**
    - ✅ Enabled: ON
-   - ✅ Client ID: `823161628768-bhqc988srlk3khfom66i2v8727lf041l.apps.googleusercontent.com`
-   - ✅ Client Secret: `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`
+   - ✅ Client ID: `YOUR_CLIENT_ID.apps.googleusercontent.com`
+   - ✅ Client Secret: `YOUR_CLIENT_SECRET`
 
 2. **Authentication** → **URL Configuration**
    - Site URL: `nftgo://`
@@ -144,7 +144,7 @@ The updated code now provides detailed logging. When you try Google sign-in, che
 🔐 Calling signInWithOAuth...
 🔐 Provider: google
 🔐 Redirect URL: nftgo://
-🔐 Supabase Base URL: https://REDACTED_SUPABASE_URL
+🔐 Supabase Base URL: https://your-project.supabase.co
 ```
 
 If it fails, you'll see detailed error information.
@@ -175,7 +175,7 @@ Look for these logs when clicking "Sign in with Google":
 
 But you can test if Supabase is reachable:
 ```bash
-curl -I https://REDACTED_SUPABASE_URL
+curl -I https://your-project.supabase.co
 ```
 
 Should return HTTP 200 or similar (not connection refused).

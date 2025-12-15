@@ -1,8 +1,16 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://REDACTED_SUPABASE_URL';
+require('dotenv').config();
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 // ⚠️ SERVICE ROLE KEY - Admin scripts only, never use in app
-const SUPABASE_SERVICE_ROLE_KEY = 'REDACTED_SERVICE_ROLE_KEY';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('ERROR: Missing environment variables!');
+  console.error('Make sure .env file exists with EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 

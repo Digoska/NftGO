@@ -9,7 +9,7 @@ This means the redirect URI in Google Cloud Console doesn't match what Supabase 
 
 ### The redirect URI that Supabase sends to Google is:
 ```
-https://REDACTED_SUPABASE_URL/auth/v1/callback
+https://your-project.supabase.co/auth/v1/callback
 ```
 
 ### Steps to Fix:
@@ -21,7 +21,7 @@ https://REDACTED_SUPABASE_URL/auth/v1/callback
 4. Click on your OAuth 2.0 Client ID
 5. Under **Authorized redirect URIs**, make sure you have EXACTLY:
    ```
-   https://REDACTED_SUPABASE_URL/auth/v1/callback
+   https://your-project.supabase.co/auth/v1/callback
    ```
 6. **IMPORTANT**: 
    - No trailing slash
@@ -52,11 +52,11 @@ https://REDACTED_SUPABASE_URL/auth/v1/callback
 
 ### Common Issues:
 
-❌ **Wrong**: `https://REDACTED_SUPABASE_URL/auth/v1/callback/` (trailing slash)
-✅ **Correct**: `https://REDACTED_SUPABASE_URL/auth/v1/callback`
+❌ **Wrong**: `https://your-project.supabase.co/auth/v1/callback/` (trailing slash)
+✅ **Correct**: `https://your-project.supabase.co/auth/v1/callback`
 
-❌ **Wrong**: `http://REDACTED_SUPABASE_URL/auth/v1/callback` (http instead of https)
-✅ **Correct**: `https://REDACTED_SUPABASE_URL/auth/v1/callback`
+❌ **Wrong**: `http://your-project.supabase.co/auth/v1/callback` (http instead of https)
+✅ **Correct**: `https://your-project.supabase.co/auth/v1/callback`
 
 ❌ **Wrong**: Multiple redirect URIs with slight differences
 ✅ **Correct**: Only the exact URL above

@@ -12,7 +12,7 @@ You get the error `{"error":"requested path is invalid"}` when:
 
 When you manually access the OAuth endpoint in Safari:
 ```
-https://REDACTED_SUPABASE_URL/auth/v1/authorize?provider=google
+https://your-project.supabase.co/auth/v1/authorize?provider=google
 ```
 
 You'll get `{"error":"requested path is invalid"}` because:
@@ -64,11 +64,11 @@ If you get this error **during the OAuth flow in your app**, it means:
    - ✅ **Enabled** toggle should be ON
    - **Client ID (for OAuth):** 
      ```
-     823161628768-bhqc988srlk3khfom66i2v8727lf041l.apps.googleusercontent.com
+     YOUR_CLIENT_ID.apps.googleusercontent.com
      ```
    - **Client Secret (for OAuth):** 
      ```
-     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
+     YOUR_CLIENT_SECRET
      ```
 
 3. **Click SAVE**
@@ -86,7 +86,7 @@ If you get this error **during the OAuth flow in your app**, it means:
 3. **Verify Authorized redirect URIs:**
    - Should include exactly:
      ```
-     https://REDACTED_SUPABASE_URL/auth/v1/callback
+     https://your-project.supabase.co/auth/v1/callback
      ```
    - **No trailing slash**
    - **Exact match** (case-sensitive)
@@ -114,7 +114,7 @@ If you get this error **during the OAuth flow in your app**, it means:
 
 2. **Supabase generates OAuth URL:**
    ```
-   https://REDACTED_SUPABASE_URL/auth/v1/authorize?
+   https://your-project.supabase.co/auth/v1/authorize?
      provider=google&
      redirect_to=nftgo://&
      [other params]
@@ -124,7 +124,7 @@ If you get this error **during the OAuth flow in your app**, it means:
 
 4. **Google redirects to Supabase:**
    ```
-   https://REDACTED_SUPABASE_URL/auth/v1/callback?
+   https://your-project.supabase.co/auth/v1/callback?
      code=[auth_code]&
      [other params]
    ```
@@ -168,7 +168,7 @@ If Supabase gets an invalid `redirect_to` parameter, or the redirect URL isn't i
 When you click "Sign in with Google", look for:
 ```
 🔐 Google OAuth redirect URL: nftgo://
-🔐 Supabase Base URL: https://REDACTED_SUPABASE_URL
+🔐 Supabase Base URL: https://your-project.supabase.co
 ```
 
 If you see errors, they'll show what's wrong.
@@ -191,7 +191,7 @@ The wildcard (`*`) allows Supabase to redirect to any path after the scheme, whi
 4. **Check Supabase Auth Logs** for detailed error messages
 5. **Verify Google Cloud Console** redirect URI is exactly:
    ```
-   https://REDACTED_SUPABASE_URL/auth/v1/callback
+   https://your-project.supabase.co/auth/v1/callback
    ```
 
 ---

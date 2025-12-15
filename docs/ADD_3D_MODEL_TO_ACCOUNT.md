@@ -160,7 +160,7 @@ INSERT INTO nfts (
 ) VALUES (
   'Epic Sword',
   'Legendary 3D sword with fire effects',
-  'https://REDACTED_SUPABASE_URL/storage/v1/object/public/nfts/sword.glb',
+  'https://your-project.supabase.co/storage/v1/object/public/nfts/sword.glb',
   'model',
   'legendary',
   48.1486,

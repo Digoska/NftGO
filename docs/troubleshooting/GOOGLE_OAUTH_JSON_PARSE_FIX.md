@@ -45,7 +45,7 @@ The JSON parse error occurs when:
    - Find your OAuth 2.0 Client ID
    - **Authorized redirect URIs** must include:
      ```
-     https://REDACTED_SUPABASE_URL/auth/v1/callback
+     https://your-project.supabase.co/auth/v1/callback
      ```
    - Click **SAVE**
 
@@ -73,7 +73,7 @@ The error can also occur if:
 
 **Test:**
 1. Open Safari on your iPhone
-2. Navigate to: `https://REDACTED_SUPABASE_URL`
+2. Navigate to: `https://your-project.supabase.co`
 3. Should load without errors
 
 ### ✅ Solution 4: Enhanced Error Handling (Already Added)
@@ -114,7 +114,7 @@ Look for these specific logs:
 1. Open Safari on iPhone
 2. Navigate to:
    ```
-   https://REDACTED_SUPABASE_URL/auth/v1/authorize?provider=google
+   https://your-project.supabase.co/auth/v1/authorize?provider=google
    ```
 3. Should redirect to Google sign-in
 4. After sign-in, should redirect back to `nftgo://`
@@ -131,7 +131,7 @@ If this fails, OAuth is misconfigured in Supabase.
 
 **Solution:** Google Cloud Console redirect URI doesn't match Supabase callback URL. Make sure it's exactly:
 ```
-https://REDACTED_SUPABASE_URL/auth/v1/callback
+https://your-project.supabase.co/auth/v1/callback
 ```
 
 ### Issue: Network timeout

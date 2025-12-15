@@ -11,7 +11,7 @@ The Google Maps API key was hardcoded in `android/app/src/main/AndroidManifest.x
 **What was exposed:**
 - Supabase project URL
 - Supabase anon key (public key)
-- **Google Maps API key: `REDACTED_GOOGLE_MAPS_KEY`** (for project nftgo-480915)
+- **Google Maps API key: `AIzaSy...`** (for project nftgo-480915) - **⚠️ This key has been revoked and should not be used**
 
 **Status:**
 - ✅ Files removed from git tracking
@@ -28,7 +28,7 @@ The exposed Google Maps API key must be revoked immediately:
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Select project: **NftGO (nftgo-480915)**
 3. Go to **APIs & Services** → **Credentials**
-4. Find the API key: `REDACTED_GOOGLE_MAPS_KEY`
+4. Find the API key (the exposed key has been revoked)
 5. Click on it → **Delete** or **Restrict** it
 6. Create a new API key
 7. Add the new key to your `.env` file as `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`

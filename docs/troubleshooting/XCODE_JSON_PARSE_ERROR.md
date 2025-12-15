@@ -71,8 +71,8 @@ When the app starts, look for these logs:
 
 ```
 🔧 Supabase Config:
-  URL: https://REDACTED_SUPABASE_URL...
-  Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  URL: https://your-project.supabase.co...
+  Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (your anon key)
   Platform: ios
   From Info.plist: Yes  ← Should say "Yes"
 ```

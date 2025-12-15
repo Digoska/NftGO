@@ -40,7 +40,7 @@ I've updated the code to use `nftgo://` as the redirect URL instead of `localhos
 1. User clicks "Sign in with Google"
 2. Google OAuth opens in browser
 3. User signs in with Google
-4. Google redirects to Supabase: `https://REDACTED_SUPABASE_URL/auth/v1/callback`
+4. Google redirects to Supabase: `https://your-project.supabase.co/auth/v1/callback`
 5. Supabase redirects to app: `nftgo://#access_token=...&refresh_token=...`
 6. App opens via deep link and extracts tokens
 7. User is signed in! ✅
