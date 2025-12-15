@@ -4,17 +4,9 @@ const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 const fs = require('fs');
 
-require('dotenv').config();
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_URL = 'https://REDACTED_SUPABASE_URL';
 // ⚠️ SERVICE ROLE KEY - Admin scripts only
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('ERROR: Missing environment variables!');
-  console.error('Make sure .env file exists with EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
-  process.exit(1);
-}
+const SUPABASE_SERVICE_ROLE_KEY = 'REDACTED_SERVICE_ROLE_KEY';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -208,25 +200,144 @@ function getViewerHTML(modelUrl) {
           const model = gltf.scene;
           scene.add(model);
 
-          // Log stats
-          let meshCount = 0;
+          // NEW: Track texture loading
+          const texturesToLoad = [];
+          model.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mat = child.material;
+              // Collect all texture maps
+              const textures = [mat.map, mat.normalMap, mat.roughnessMap, mat.metalnessMap, mat.emissiveMap, mat.aoMap];
+              textures.forEach(tex => {
+                if (tex && tex.image && !texturesToLoad.includes(tex)) {
+                  texturesToLoad.push(tex);
+                }
+              });
+            }
+          });
+
+          log('Textures to load: ' + texturesToLoad.length);
+
+          // Wait for all textures to load
+          let loadedCount = 0;
+          const texturesReady = new Promise((resolve) => {
+            if (texturesToLoad.length === 0) {
+              log('No textures to wait for');
+              resolve();
+              return;
+            }
+
+            // Timeout fallback (5 seconds max wait)
+            const timeout = setTimeout(() => {
+              log('  ⚠️ Texture loading timeout, proceeding anyway');
+              resolve();
+            }, 5000);
+
+            texturesToLoad.forEach((tex, index) => {
+              // Check if texture has image property and if it's already loaded
+              if (tex.image && typeof tex.image.complete !== 'undefined') {
+                if (tex.image.complete) {
+                  loadedCount++;
+                  log('  Texture ' + (index + 1) + ' already loaded');
+                  if (loadedCount === texturesToLoad.length) {
+                    clearTimeout(timeout);
+                    resolve();
+                  }
+                } else {
+                  tex.image.onload = () => {
+                    loadedCount++;
+                    log('  Texture ' + (index + 1) + ' loaded (' + loadedCount + '/' + texturesToLoad.length + ')');
+                    if (loadedCount === texturesToLoad.length) {
+                      clearTimeout(timeout);
+                      resolve();
+                    }
+                  };
+                  tex.image.onerror = (err) => {
+                    loadedCount++;
+                    log('  ⚠️ Texture ' + (index + 1) + ' FAILED to load');
+                    if (loadedCount === texturesToLoad.length) {
+                      clearTimeout(timeout);
+                      resolve();
+                    }
+                  };
+                }
+              } else {
+                // Texture doesn't have standard image property (might be embedded/ready)
+                loadedCount++;
+                log('  Texture ' + (index + 1) + ' appears ready (no image property)');
+                if (loadedCount === texturesToLoad.length) {
+                  clearTimeout(timeout);
+                  resolve();
+                }
+              }
+            });
+          });
+
+          // Continue with existing code AFTER textures are ready
+          texturesReady.then(() => {
+            log('All textures processed, continuing...');
+
+            // Log stats
+            let meshCount = 0;
           let vertexCount = 0;
+          let textureCount = 0;
+          let materialTypes = new Set();
+          let hasBaseColor = false;
+          let hasMetallic = false;
+          let hasNormal = false;
+
           model.traverse((child) => {
             if (child.isMesh) {
               meshCount++;
               vertexCount += child.geometry.attributes.position.count;
+
+              // Log material details
+              const mat = child.material;
+              if (mat) {
+                materialTypes.add(mat.type);
+
+                // Check for textures
+                if (mat.map) { textureCount++; hasBaseColor = true; }
+                if (mat.metalnessMap) { textureCount++; hasMetallic = true; }
+                if (mat.normalMap) { textureCount++; hasNormal = true; }
+                if (mat.roughnessMap) textureCount++;
+                if (mat.emissiveMap) textureCount++;
+                if (mat.aoMap) textureCount++;
+
+                // Log texture loading status
+                if (mat.map && mat.map.image) {
+                  const img = mat.map.image;
+                  log(\`  Texture: \${img.width}x\${img.height}, complete=\${img.complete}\`);
+                }
+              }
             }
           });
+
           log('Stats: Meshes=' + meshCount + ', Vertices=' + vertexCount);
+          log('Materials: ' + Array.from(materialTypes).join(', '));
+          log('Textures: ' + textureCount + ' total (baseColor=' + hasBaseColor + ', metallic=' + hasMetallic + ', normal=' + hasNormal + ')');
 
           // Normalize scale/material
+          let materialsModified = 0;
           model.traverse((child) => {
             if (child.isMesh) {
-              child.material.side = THREE.DoubleSide; // Fix inside-out geometry
-              child.material.transparent = false; // Force opaque to debug visibility
-              child.material.opacity = 1.0;
+              const mat = child.material;
+
+              // Log if material is missing or broken
+              if (!mat) {
+                log('  ⚠️ WARNING: Mesh has no material!');
+                child.material = new THREE.MeshStandardMaterial({ color: 0xff00ff }); // Bright pink fallback
+              } else {
+                child.material.side = THREE.DoubleSide; // Fix inside-out geometry
+                child.material.transparent = false; // Force opaque
+                child.material.opacity = 1.0;
+
+                // Force material to update
+                child.material.needsUpdate = true;
+                materialsModified++;
+              }
             }
           });
+          log('Materials processed: ' + materialsModified);
 
           // Auto-fit camera logic
           const box = new THREE.Box3().setFromObject(model);
@@ -240,40 +351,65 @@ function getViewerHTML(modelUrl) {
              log("⚠️ WARNING: Empty bounding box!");
           }
 
-          // Center model at origin
-          model.position.sub(center);
-
           // NORMALIZE SCALE: Scale model to fit in a unit box (size ~1)
           // This avoids issues with extremely large or small models causing camera/clipping issues
           const maxDim = Math.max(size.x, size.y, size.z) || 2;
-          const scaleFactor = 5.0 / maxDim; // Scale to ~5 units
+
+          // Adaptive scaling based on model size
+          let targetSize;
+          if (maxDim > 10000) {
+            targetSize = 2000; // Extreme models (Hunter-Killer: 36,593 units) - 4× increase
+          } else if (maxDim > 1000) {
+            targetSize = 200; // Large models
+          } else {
+            targetSize = 100; // Small/Medium models
+          }
+
+          // Center model at origin
+          model.position.sub(center);
+
+          // NORMALIZE SCALE
+          const scaleFactor = targetSize / maxDim;
           model.scale.multiplyScalar(scaleFactor);
-          
-          log(\`Normalized Scale: \${scaleFactor.toFixed(4)} (Original Size: \${maxDim.toFixed(2)})\`);
 
-          // Recalculate size after scaling (should be ~5)
-          // const newBox = new THREE.Box3().setFromObject(model);
-          // const newSize = newBox.getSize(new THREE.Vector3());
-          // const newMaxDim = Math.max(newSize.x, newSize.y, newSize.z);
-          const newMaxDim = 5.0;
+          log(\`Normalized Scale: \${scaleFactor.toFixed(4)} (Original: \${maxDim.toFixed(2)} units → Target: \${targetSize} units)\`);
 
-          // Calculate camera distance
+          // RE-CENTER after scaling (scaling can shift the position)
+          const scaledBox = new THREE.Box3().setFromObject(model);
+          const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+          model.position.sub(scaledCenter);
+
+          log('Model re-centered after scaling');
+
+          // ROTATE MODEL for better viewing angle
+          // Many models are exported facing wrong direction (sideways, backwards)
+          // Rotate 45° on Y-axis to get a better 3/4 perspective
+          model.rotation.y = Math.PI / 4; // 45 degrees clockwise
+          log('Model rotated 45° for better viewing angle');
+
+          const newMaxDim = targetSize;
+
+          // Calculate camera distance based on actual normalized size
           const fov = camera.fov * (Math.PI / 180);
-          let cameraZ = Math.abs(newMaxDim / 2 / Math.tan(fov / 2));
-          
-          cameraZ *= 1.2; // Tighter zoom
+          let cameraDistance = Math.abs(targetSize / Math.tan(fov / 2));
 
-          // Reset clipping planes for normalized scale
-          camera.near = 0.1;
-          camera.far = 1000;
+          cameraDistance *= 0.95; // Even tighter framing for better frame usage
+
+          // Reset clipping planes for adaptive scale
+          camera.near = cameraDistance * 0.01;
+          camera.far = cameraDistance * 100;
           camera.updateProjectionMatrix();
 
-          // Position camera
-          const distance = cameraZ;
-          camera.position.set(distance * 0.8, distance * 0.6, distance * 1.0);
-          camera.lookAt(0, 0, 0);
-          
-          log('Camera pos: ' + JSON.stringify(camera.position));
+          // Position camera at consistent 3/4 angle (slightly above and to the side)
+          // This gives good perspective on most 3D models
+          const camX = cameraDistance * 0.7;  // Right side (was 0.8)
+          const camY = cameraDistance * 0.5;  // Above (was 0.6)
+          const camZ = cameraDistance * 0.7;  // Front (was 1.0)
+
+          camera.position.set(camX, camY, camZ);
+          camera.lookAt(0, 0, 0); // Look at origin (model center)
+
+          log('Camera: distance=' + cameraDistance.toFixed(2) + ', pos=(' + camX.toFixed(2) + ', ' + camY.toFixed(2) + ', ' + camZ.toFixed(2) + ')');
 
           // Wait for textures (simulated by delay + render loop)
           log("Starting render loop...");
@@ -284,9 +420,12 @@ function getViewerHTML(modelUrl) {
           function animate() {
             if (frames > totalFrames) {
                log("Render loop finished. Checking for blank image...");
+
+               // NEW: Check if anything is actually being drawn
+               const gl = renderer.getContext();
+               log('WebGL state: drawingBuffer=' + gl.drawingBufferWidth + 'x' + gl.drawingBufferHeight);
                
                // Validation: Check if image is blank (uniform color)
-               const gl = renderer.getContext();
                const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
                gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
                
@@ -324,6 +463,7 @@ function getViewerHTML(modelUrl) {
             frames++;
           }
           animate();
+          }); // Close texturesReady.then()
 
         }, (xhr) => {
             // progress
