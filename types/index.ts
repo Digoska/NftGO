@@ -15,6 +15,7 @@ export interface NFT {
   name: string;
   description: string;
   image_url: string;
+  thumbnail_url?: string; // Added for static preview
   media_type?: 'image' | 'video' | 'model' | 'gif';
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
   latitude: number;
@@ -33,6 +34,7 @@ export interface UserNFT {
   collection_latitude?: number;
   collection_longitude?: number;
   collected_at: string;
+  nft?: NFT; // Joined NFT details
 }
 
 export interface Location {
