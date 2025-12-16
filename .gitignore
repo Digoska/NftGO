@@ -117,3 +117,8 @@ migration*.sql
 AIza*
 *google*.key
 *google*.json
+
+# BFG Repo Cleaner
+bfg.jar
+replacements-step1.txt
+replacements-step2.txt
