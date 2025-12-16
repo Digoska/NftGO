@@ -25,7 +25,7 @@ INSERT INTO nfts (
 ) VALUES (
   'Fantasy Sword GLTF',
   'Cool 3D animated sword with textures',
-  'https://REDACTED_SUPABASE_URL/storage/v1/object/public/nfts/FantasySword.gltf',
+  'https://wkpgupdorbgcthmjoybe.supabase.co/storage/v1/object/public/nfts/FantasySword.gltf',
   'model',
   'epic',
   48.1486,
