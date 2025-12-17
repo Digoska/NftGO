@@ -1,3 +1,12 @@
+/**
+ * Generate 3D thumbnails for NFTs
+ * 
+ * Usage:
+ *   node generate-3d-thumbnails.js        // Skip NFTs with existing thumbnails
+ *   node generate-3d-thumbnails.js --force // Regenerate all thumbnails
+ *   node generate-3d-thumbnails.js -f      // Short form of --force
+ */
+
 require('dotenv').config();
 
 const puppeteer = require('puppeteer');
@@ -5,6 +14,16 @@ const sharp = require('sharp');
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 const fs = require('fs');
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const forceRegenerate = args.includes('--force') || args.includes('-f');
+
+if (forceRegenerate) {
+  console.log('🔄 Force regeneration mode: Will regenerate all thumbnails');
+} else {
+  console.log('⏭️  Skip mode: Will skip NFTs with existing thumbnails');
+}
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 // ⚠️ SERVICE ROLE KEY - Admin scripts only
@@ -24,8 +43,8 @@ if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 async function generate3DThumbnails() {
   console.log('🚀 Starting 3D thumbnail generation (DEBUG MODE)...');
 
-  // 1. Fetch NFTs
-  const { data: nfts, error } = await supabase.from('nfts').select('name, image_url');
+  // 1. Fetch NFTs (include thumbnail_url for skip logic)
+  const { data: nfts, error } = await supabase.from('nfts').select('name, image_url, thumbnail_url');
   if (error) {
     console.error('❌ Error fetching NFTs:', error);
     return;
@@ -33,13 +52,23 @@ async function generate3DThumbnails() {
 
   // Filter GLBs
   const glbNfts = nfts.filter(nft => nft.image_url && nft.image_url.toLowerCase().endsWith('.glb'));
-  console.log(`📦 Found ${glbNfts.length} GLB models to process`);
-  console.log('⚠️ Processing ONLY the first model for debugging...\n');
+  console.log(`📦 Found ${glbNfts.length} GLB models total`);
+
+  // Count existing thumbnails
+  const withThumbnails = glbNfts.filter(nft => nft.thumbnail_url).length;
+  const withoutThumbnails = glbNfts.length - withThumbnails;
+  console.log(`   📊 With thumbnails: ${withThumbnails}`);
+  console.log(`   📊 Without thumbnails: ${withoutThumbnails}\n`);
 
   if (glbNfts.length === 0) {
     console.log('No GLB models found. Exiting.');
     return;
   }
+
+  // Counters for summary
+  let processed = 0;
+  let skipped = 0;
+  let failed = 0;
 
   // 2. Launch Browser
   const browser = await puppeteer.launch({
@@ -65,9 +94,16 @@ async function generate3DThumbnails() {
   const nftsToProcess = glbNfts; // Restore for all
 
   for (const nft of nftsToProcess) {
+    // Skip if thumbnail exists and not forcing regeneration
+    if (!forceRegenerate && nft.thumbnail_url) {
+      console.log(`⏭️  Skipping "${nft.name}" - thumbnail already exists`);
+      skipped++;
+      continue;
+    }
+
     const filename = nft.image_url.split('/').pop();
     const thumbnailName = decodeURIComponent(filename).replace(/\.glb$/i, '.png');
-    console.log(`Processing: ${nft.name} (${filename})`);
+    console.log(`🎨 Processing: ${nft.name} (${filename})`);
 
     try {
         const modelUrl = nft.image_url;
@@ -117,14 +153,23 @@ async function generate3DThumbnails() {
 
         if (uploadError) throw uploadError;
         console.log(`  📤 Uploaded to Supabase\n`);
+        processed++;
 
     } catch (err) {
         console.error(`  ❌ Failed: ${err.message}\n`);
+        failed++;
     }
   }
 
   await browser.close();
-  console.log('✨ Debug generation complete!');
+  
+  // Summary
+  console.log('\n📊 Summary:');
+  console.log(`   ✅ Processed: ${processed}`);
+  console.log(`   ⏭️  Skipped: ${skipped}`);
+  console.log(`   ❌ Failed: ${failed}`);
+  console.log(`   📝 Total: ${nftsToProcess.length}`);
+  console.log('\n✨ Generation complete!');
 }
 
 function getViewerHTML(modelUrl) {
