@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Animated,
   RefreshControl,
   Dimensions,
+  ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -28,9 +29,11 @@ const { width } = Dimensions.get('window');
 
 // Calculate card size for 2-column grid
 const GRID_PADDING = spacing.md;
-const GRID_GAP = spacing.sm; // Tighter gap (8px)
-// Width = (Screen Width - PaddingLeft - PaddingRight - Gap) / 2
+const GRID_GAP = spacing.sm;
 const CARD_WIDTH = (width - (GRID_PADDING * 2) - GRID_GAP) / 2;
+
+// Maximum concurrent legendary 3D models to prevent memory issues
+const MAX_CONCURRENT_3D_MODELS = 3;
 
 export default function WalletScreen() {
   const { user } = useAuth();
@@ -42,7 +45,10 @@ export default function WalletScreen() {
   const [filter, setFilter] = useState<'all' | 'common' | 'rare' | 'epic' | 'legendary'>('all');
   const [fadeAnim] = useState(new Animated.Value(0));
   const [listOpacity] = useState(new Animated.Value(1));
-
+  
+  // Track visible legendary NFT IDs for 3D model loading
+  const [visibleLegendaryIds, setVisibleLegendaryIds] = useState<Set<string>>(new Set());
+  const [loadedModelIds, setLoadedModelIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (user) {
@@ -109,13 +115,13 @@ export default function WalletScreen() {
         
         setUserNFTs(nfts);
         
-        // Pre-cache media
-        const mediaUrls = nfts
-          .map(item => item.nft?.image_url)
-          .filter((url): url is string => !!url);
+        // Pre-cache thumbnails (lightweight)
+        const thumbnailUrls = nfts
+          .map(item => item.nft?.thumbnail_url || item.nft?.image_url)
+          .filter((url): url is string => !!url && !url.includes('.glb') && !url.includes('.gltf'));
         
-        if (mediaUrls.length > 0) {
-          preCacheFiles(mediaUrls).catch(console.error);
+        if (thumbnailUrls.length > 0) {
+          preCacheFiles(thumbnailUrls).catch(console.error);
         }
       }
     } catch (error) {
@@ -133,6 +139,12 @@ export default function WalletScreen() {
   const handleNFTPress = (nft: NFT) => {
     setSelectedNFT(nft);
     setShowDetail(true);
+  };
+
+  const handleCloseDetail = () => {
+    setShowDetail(false);
+    // Clear selected NFT after animation to cleanup 3D model
+    setTimeout(() => setSelectedNFT(null), 300);
   };
 
   const getRarityColor = (rarity: string) => {
@@ -167,6 +179,41 @@ export default function WalletScreen() {
     });
     return stats;
   }, [userNFTs]);
+
+  // Track viewable items for lazy loading legendary 3D models
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const legendaryIds = new Set<string>();
+    
+    viewableItems.forEach((item) => {
+      const nft = (item.item as UserNFT)?.nft;
+      if (nft && nft.rarity === 'legendary' && nft.media_type === 'model') {
+        legendaryIds.add(nft.id);
+      }
+    });
+    
+    setVisibleLegendaryIds(legendaryIds);
+    
+    // Update loaded models (limit to MAX_CONCURRENT_3D_MODELS)
+    setLoadedModelIds(prev => {
+      const newLoaded = new Set<string>();
+      let count = 0;
+      
+      // Prioritize visible items
+      legendaryIds.forEach(id => {
+        if (count < MAX_CONCURRENT_3D_MODELS) {
+          newLoaded.add(id);
+          count++;
+        }
+      });
+      
+      return newLoaded;
+    });
+  }, []);
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 100,
+  }).current;
 
   const ListHeaderComponent = () => (
     <View style={styles.headerContainer}>
@@ -270,10 +317,16 @@ export default function WalletScreen() {
             windowSize={5} 
             initialNumToRender={8}
             maxToRenderPerBatch={4}
-            removeClippedSubviews={true} 
+            removeClippedSubviews={true}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
             
             renderItem={({ item, index }) => {
               if (!item.nft) return null;
+              
+              const isLegendary = item.nft.rarity === 'legendary';
+              const isModel = item.nft.media_type === 'model';
+              const shouldLoad3D = isLegendary && isModel && loadedModelIds.has(item.nft.id);
               
               return (
                 <NFTCard
@@ -282,6 +335,7 @@ export default function WalletScreen() {
                   onPress={() => handleNFTPress(item.nft!)}
                   getRarityColor={getRarityColor}
                   getRarityLabel={getRarityLabel}
+                  shouldLoad3D={shouldLoad3D}
                 />
               );
             }}
@@ -289,76 +343,120 @@ export default function WalletScreen() {
         </Animated.View>
       )}
 
-      <Modal
+      {/* Detail Modal with lazy-loaded 3D model */}
+      <NFTDetailModal
         visible={showDetail}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDetail(false)}
-      >
-        <View style={styles.modalContainer}>
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowDetail(false)}
-          />
-          <View style={styles.modalContent}>
-            {selectedNFT && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>NFT Details</Text>
-                  <TouchableOpacity
-                    onPress={() => setShowDetail(false)}
-                    style={styles.modalCloseButton}
-                  >
-                    <Ionicons name="close" size={24} color={colors.text} />
-                  </TouchableOpacity>
-                </View>
+        nft={selectedNFT}
+        onClose={handleCloseDetail}
+        getRarityColor={getRarityColor}
+        getRarityLabel={getRarityLabel}
+      />
+    </View>
+  );
+}
 
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <View style={styles.detailImageContainer}>
-                    {selectedNFT.image_url ? (
-                      selectedNFT.media_type === 'video' ? (
-                        <VideoNFT
-                          uri={selectedNFT.image_url}
-                          style={styles.detailImage}
-                          autoPlay={true}
-                          loop={true}
-                        />
-                      ) : selectedNFT.media_type === 'model' ? (
-                        <View style={{ height: 300, width: '100%' }}>
-                          <WebViewModel uri={selectedNFT.image_url} />
-                        </View>
-                      ) : (
-                        <CachedImage
-                          uri={selectedNFT.image_url}
-                          style={styles.detailImage}
-                          resizeMode="cover"
-                        />
-                      )
-                    ) : (
-                      <View style={[styles.detailImagePlaceholder, { backgroundColor: getRarityColor(selectedNFT.rarity) + '20' }]}>
-                        <Ionicons name="image-outline" size={80} color={getRarityColor(selectedNFT.rarity)} />
+// NFT Detail Modal - loads 3D model on demand
+function NFTDetailModal({
+  visible,
+  nft,
+  onClose,
+  getRarityColor,
+  getRarityLabel,
+}: {
+  visible: boolean;
+  nft: NFT | null;
+  onClose: () => void;
+  getRarityColor: (rarity: string) => string;
+  getRarityLabel: (rarity: string) => string;
+}) {
+  const [modelLoading, setModelLoading] = useState(true);
+
+  // Reset loading state when modal opens with new NFT
+  useEffect(() => {
+    if (visible && nft) {
+      setModelLoading(true);
+    }
+  }, [visible, nft?.id]);
+
+  if (!nft) return null;
+
+  const isModel = nft.media_type === 'model';
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalContainer}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>NFT Details</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.modalCloseButton}
+            >
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.detailImageContainer}>
+              {nft.image_url ? (
+                nft.media_type === 'video' ? (
+                  <VideoNFT
+                    uri={nft.image_url}
+                    style={styles.detailImage}
+                    autoPlay={true}
+                    loop={true}
+                  />
+                ) : isModel ? (
+                  <View style={{ height: 300, width: '100%' }}>
+                    {modelLoading && (
+                      <View style={styles.modelLoadingOverlay}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={styles.modelLoadingText}>Loading 3D model...</Text>
                       </View>
                     )}
+                    <WebViewModel 
+                      uri={nft.image_url} 
+                      onLoad={() => setModelLoading(false)}
+                    />
                   </View>
+                ) : (
+                  <CachedImage
+                    uri={nft.image_url}
+                    style={styles.detailImage}
+                    resizeMode="cover"
+                  />
+                )
+              ) : (
+                <View style={[styles.detailImagePlaceholder, { backgroundColor: getRarityColor(nft.rarity) + '20' }]}>
+                  <Ionicons name="image-outline" size={80} color={getRarityColor(nft.rarity)} />
+                </View>
+              )}
+            </View>
 
-                  <Text style={styles.detailName}>{selectedNFT.name}</Text>
-                  <View style={styles.detailRarityContainer}>
-                    <View style={[styles.rarityDot, { backgroundColor: getRarityColor(selectedNFT.rarity) }]} />
-                    <Text style={[styles.detailRarity, { color: getRarityColor(selectedNFT.rarity) }]}>
-                      {getRarityLabel(selectedNFT.rarity)}
-                    </Text>
-                  </View>
-                  <Text style={styles.detailDescription}>
-                    {selectedNFT.description || 'No description available'}
-                  </Text>
-                </ScrollView>
-              </>
-            )}
-          </View>
+            <Text style={styles.detailName}>{nft.name}</Text>
+            <View style={styles.detailRarityContainer}>
+              <View style={[styles.rarityDot, { backgroundColor: getRarityColor(nft.rarity) }]} />
+              <Text style={[styles.detailRarity, { color: getRarityColor(nft.rarity) }]}>
+                {getRarityLabel(nft.rarity)}
+              </Text>
+            </View>
+            <Text style={styles.detailDescription}>
+              {nft.description || 'No description available'}
+            </Text>
+          </ScrollView>
         </View>
-      </Modal>
-    </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -399,21 +497,24 @@ function FilterButton({
   );
 }
 
-// Redesigned NFT Card
+// Redesigned NFT Card with conditional 3D loading
 function NFTCard({
   nft,
   index,
   onPress,
   getRarityColor,
   getRarityLabel,
+  shouldLoad3D,
 }: {
   nft: NFT;
   index: number;
   onPress: () => void;
   getRarityColor: (rarity: string) => string;
   getRarityLabel: (rarity: string) => string;
+  shouldLoad3D: boolean;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
+  const [modelLoading, setModelLoading] = useState(true);
 
   useEffect(() => {
     Animated.timing(opacity, {
@@ -424,12 +525,50 @@ function NFTCard({
     }).start();
   }, []);
 
-  // Log to debug thumbnail loading
-  console.log('Rendering NFT:', nft.name, 'thumbnail:', nft.thumbnail_url);
+  const isLegendary = nft.rarity === 'legendary';
+  const isModel = nft.media_type === 'model';
 
   // Determine content to render
   const renderContent = () => {
-    // 1. Priority: Thumbnail (always static image)
+    // Legendary models: Show 3D if allowed, otherwise show thumbnail with loading indicator
+    if (isLegendary && isModel) {
+      if (shouldLoad3D && nft.image_url) {
+        return (
+          <View style={styles.model3DContainer}>
+            {modelLoading && (
+              <View style={styles.modelLoadingOverlay}>
+                <ActivityIndicator size="small" color={colors.warning} />
+              </View>
+            )}
+            <WebViewModel 
+              uri={nft.image_url} 
+              onLoad={() => setModelLoading(false)}
+            />
+            {/* Legendary badge */}
+            <View style={styles.legendaryBadge}>
+              <Ionicons name="star" size={12} color="#FFF" />
+            </View>
+          </View>
+        );
+      }
+      // Show thumbnail with 3D indicator while waiting to load
+      if (nft.thumbnail_url) {
+        return (
+          <View style={styles.thumbnailWithIndicator}>
+            <CachedImage
+              uri={nft.thumbnail_url}
+              style={styles.nftImage}
+              resizeMode="cover"
+            />
+            <View style={styles.model3DIndicator}>
+              <Ionicons name="cube" size={16} color="#FFF" />
+            </View>
+          </View>
+        );
+      }
+    }
+    
+    // Non-legendary: Always use thumbnail
     if (nft.thumbnail_url) {
       return (
         <CachedImage
@@ -440,7 +579,7 @@ function NFTCard({
       );
     }
     
-    // 2. Fallback: Original image (only if it's an image type)
+    // Fallback: Original image (only if it's an image type)
     if ((!nft.media_type || nft.media_type === 'image') && nft.image_url) {
       return (
         <CachedImage
@@ -451,10 +590,14 @@ function NFTCard({
       );
     }
 
-    // 3. Fallback: Placeholder icon (for models/videos without thumbnail)
+    // Fallback: Placeholder icon (for models/videos without thumbnail)
     return (
       <View style={[styles.nftImagePlaceholder, { backgroundColor: getRarityColor(nft.rarity) + '15' }]}>
-        <Ionicons name="image-outline" size={32} color={getRarityColor(nft.rarity)} />
+        <Ionicons 
+          name={isModel ? "cube-outline" : "image-outline"} 
+          size={32} 
+          color={getRarityColor(nft.rarity)} 
+        />
       </View>
     );
   };
@@ -555,7 +698,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
-    // Soft shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
@@ -580,20 +722,18 @@ const styles = StyleSheet.create({
   },
   filterScrollContent: {
     paddingVertical: spacing.sm,
-    // Horizontal padding handled by isFirst/isLast
   },
   filterButton: {
     paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: 100, // Pill shape
-    backgroundColor: '#F3F4F6', // Light gray default
+    borderRadius: 100,
+    backgroundColor: '#F3F4F6',
     marginRight: spacing.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
   filterButtonActive: {
-    backgroundColor: colors.primary, // Active Purple
-    // Active shadow
+    backgroundColor: colors.primary,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -614,7 +754,7 @@ const styles = StyleSheet.create({
   gridContainer: {
     paddingHorizontal: GRID_PADDING,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl, // Space for bottom nav
+    paddingBottom: spacing.xxl,
   },
   gridColumnWrapper: {
     justifyContent: 'space-between',
@@ -624,7 +764,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: 16,
     overflow: 'hidden',
-    // No borders
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
@@ -633,7 +772,7 @@ const styles = StyleSheet.create({
   },
   nftImageContainer: {
     width: '100%',
-    height: 180, // Taller image
+    height: 180,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -666,14 +805,52 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textTransform: 'uppercase',
   },
-  typeIcon: {
+  // 3D Model specific styles
+  model3DContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  modelLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  modelLoadingText: {
+    ...typography.caption,
+    color: '#FFF',
+    marginTop: spacing.xs,
+  },
+  legendaryBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: colors.warning,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnailWithIndicator: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  model3DIndicator: {
     position: 'absolute',
     bottom: 8,
     left: 8,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 12,
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -815,4 +992,3 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
 });
-

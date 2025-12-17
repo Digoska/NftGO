@@ -200,26 +200,56 @@ export default function CollectionModal({
               <View style={[styles.imageContainer, { borderColor: rarityColor }]}>
                 {(() => {
                   const imageUrl = nft?.image_url;
+                  const thumbnailUrl = nft?.thumbnail_url;
                   const canLoad3D = is3DModel(imageUrl);
-                  const canLoadImage = !canLoad3D && isValidImageURL(imageUrl);
+                  const isLegendary = rarity === 'legendary';
                   
-                  if (canLoad3D && imageUrl) {
-                    // Use WebViewModel component for GLB/GLTF 3D models
-                    // This uses WebView + Google model-viewer for proper texture support
+                  // Only load 3D models for legendary NFTs in preview
+                  // Non-legendary NFTs show thumbnail/image in preview, 3D only in full detail view
+                  if (canLoad3D && imageUrl && isLegendary) {
+                    // Use WebViewModel component for GLB/GLTF 3D models (legendary only)
                     return (
                       <View style={styles.modelContainer}>
                         <WebViewModel 
                           uri={imageUrl}
                           autoRotate={true}
                         />
+                        <View style={styles.legendaryBadge}>
+                          <Ionicons name="star" size={12} color="#FFFFFF" />
+                        </View>
                       </View>
                     );
-                  } else if (canLoadImage && imageUrl && !imageError) {
-                    // Use Image component for regular images
+                  } else if (canLoad3D && thumbnailUrl) {
+                    // Non-legendary 3D model: show thumbnail with 3D indicator
                     return (
                       <View style={styles.imageWrapper}>
                         <Image
-                          source={{ uri: imageUrl }}
+                          source={{ uri: thumbnailUrl }}
+                          style={styles.nftImage}
+                          resizeMode="cover"
+                          onLoadStart={() => setImageLoading(true)}
+                          onLoadEnd={() => setImageLoading(false)}
+                          onError={() => {
+                            setImageError(true);
+                            setImageLoading(false);
+                          }}
+                        />
+                        <View style={styles.model3DIndicator}>
+                          <Ionicons name="cube" size={16} color="#FFFFFF" />
+                        </View>
+                        {imageLoading && (
+                          <View style={styles.imageLoaderContainer}>
+                            <ActivityIndicator size="large" color={rarityColor} />
+                          </View>
+                        )}
+                      </View>
+                    );
+                  } else if ((thumbnailUrl || isValidImageURL(imageUrl)) && !imageError) {
+                    // Use thumbnail or image
+                    return (
+                      <View style={styles.imageWrapper}>
+                        <Image
+                          source={{ uri: thumbnailUrl || imageUrl }}
                           style={styles.nftImage}
                           resizeMode="cover"
                           onLoadStart={() => setImageLoading(true)}
@@ -480,10 +510,33 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 16,
     overflow: 'hidden',
+    position: 'relative',
   },
   nftModel: {
     width: '100%',
     height: '100%',
+  },
+  legendaryBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: colors.warning,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  model3DIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   rarityBadge: {
     position: 'absolute',

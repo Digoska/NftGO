@@ -10,9 +10,10 @@ interface WebViewModelProps {
   poster?: string;
   autoRotate?: boolean;
   isStatic?: boolean;
+  onLoad?: () => void;
 }
 
-export default function WebViewModel({ uri, poster, autoRotate = true, isStatic = false }: WebViewModelProps) {
+export default function WebViewModel({ uri, poster, autoRotate = true, isStatic = false, onLoad }: WebViewModelProps) {
   const [loading, setLoading] = useState(true);
   const [modelSrc, setModelSrc] = useState<string | null>(null);
   const [statusText, setStatusText] = useState('Initializing...');
@@ -125,7 +126,10 @@ export default function WebViewModel({ uri, poster, autoRotate = true, isStatic 
           originWhitelist={['*']}
           source={{ html: htmlContent }}
           style={[styles.webview, { opacity: loading ? 0 : 1 }]}
-          onLoadEnd={() => setLoading(false)}
+          onLoadEnd={() => {
+            setLoading(false);
+            onLoad?.();
+          }}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           startInLoadingState={false}
