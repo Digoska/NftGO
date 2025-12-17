@@ -14,6 +14,7 @@ import {
   ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { UserNFT, NFT } from '../../types';
@@ -55,6 +56,15 @@ export default function WalletScreen() {
       fetchUserNFTs();
     }
   }, [user]);
+
+  // Refresh data when tab becomes focused (e.g., after collecting NFT on map)
+  useFocusEffect(
+    useCallback(() => {
+      if (user && !loading) {
+        fetchUserNFTs();
+      }
+    }, [user])
+  );
 
   // Animate filter change
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 // @ts-ignore
 import * as FileSystem from 'expo-file-system/legacy';
@@ -16,7 +16,6 @@ interface WebViewModelProps {
 export default function WebViewModel({ uri, poster, autoRotate = true, isStatic = false, onLoad }: WebViewModelProps) {
   const [loading, setLoading] = useState(true);
   const [modelSrc, setModelSrc] = useState<string | null>(null);
-  const [statusText, setStatusText] = useState('Initializing...');
 
   useEffect(() => {
     let isMounted = true;
@@ -43,18 +42,15 @@ export default function WebViewModel({ uri, poster, autoRotate = true, isStatic 
         const fileInfo = await FileSystem.getInfoAsync(fileUri);
         
         if (fileInfo.exists) {
-          if (isMounted) setStatusText('Loading from cache...');
           // Read cached file
           const base64 = await FileSystem.readAsStringAsync(fileUri, {
             encoding: FileSystem.EncodingType.Base64,
           });
           if (isMounted) setModelSrc(`data:model/gltf-binary;base64,${base64}`);
         } else {
-          if (isMounted) setStatusText('Downloading model...');
           // Download file
           await FileSystem.downloadAsync(uri, fileUri);
           
-          if (isMounted) setStatusText('Processing...');
           // Read downloaded file
           const base64 = await FileSystem.readAsStringAsync(fileUri, {
             encoding: FileSystem.EncodingType.Base64,
@@ -114,13 +110,6 @@ export default function WebViewModel({ uri, poster, autoRotate = true, isStatic 
 
   return (
     <View style={styles.container}>
-      {loading && (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#6C5CE7" />
-          <Text style={styles.loadingText}>{statusText}</Text>
-        </View>
-      )}
-
       {modelSrc && (
         <WebView
           originWhitelist={['*']}
@@ -153,17 +142,4 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-  loader: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    zIndex: 10,
-  },
-  loadingText: {
-    marginTop: 10,
-    color: '#666',
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-  }
 });

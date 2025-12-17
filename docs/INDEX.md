@@ -253,6 +253,7 @@ Changelog and daily implementation notes:
 - **[2025-12-07-rare-rarity-color-update.md](./2025-12-07-rare-rarity-color-update.md)** - Rare rarity color update
 - **[2025-12-07-stat-cards-and-fixes.md](./2025-12-07-stat-cards-and-fixes.md)** - Stat cards and fixes
 - **[2025-12-07-wallet-redesign-and-model-fix.md](./2025-12-07-wallet-redesign-and-model-fix.md)** - Wallet redesign and model fix
+- **[2025-12-17-thumbnail-system-and-fixes.md](./2025-12-17-thumbnail-system-and-fixes.md)** ⭐ - Thumbnail system, lazy 3D loading, collection refresh fix
 
 ---
 
@@ -288,7 +289,7 @@ Changelog and daily implementation notes:
 
 ---
 
-**Last Updated:** December 15, 2024
+**Last Updated:** December 17, 2024
 
 **Total Documentation Files:** 100+ files organized across 10+ categories
 

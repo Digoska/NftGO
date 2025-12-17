@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
@@ -56,6 +56,15 @@ export default function HomeScreen() {
       loadEmailBlurPreference();
     }
   }, [user]);
+
+  // Refresh data when tab becomes focused (e.g., after collecting NFT on map)
+  useFocusEffect(
+    useCallback(() => {
+      if (user && !loading) {
+        fetchData();
+      }
+    }, [user])
+  );
 
   const loadEmailBlurPreference = async () => {
     const blurred = await getEmailBlurPreference();
