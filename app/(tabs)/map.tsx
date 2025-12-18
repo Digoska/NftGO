@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import Constants from 'expo-constants';
-import MapView from 'react-native-maps'; // Removed PROVIDER_DEFAULT
+import MapView, { Marker, Circle } from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentLocation, calculateDistance } from '../../lib/location';
 import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
@@ -27,6 +27,7 @@ import PersonalSpawnMarker from '../../components/map/PersonalSpawnMarker';
 import CollectionModal from '../../components/map/CollectionModal';
 import { useAuth } from '../../lib/auth-context';
 import * as Location from 'expo-location';
+import LocationJoystick from '../../components/dev/LocationJoystick';
 
 // Check if we're in Expo Go (maps won't work)
 const isExpoGo = Constants.appOwnership === 'expo';
@@ -40,9 +41,21 @@ export default function MapScreen() {
   const [selectedSpawn, setSelectedSpawn] = useState<PersonalSpawn | null>(null);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   
+  // Dev mode: location override and joystick
+  const [devLocation, setDevLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [joystickActive, setJoystickActive] = useState(false);
+  
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const spawnsLoadedRef = useRef(false);
+
+  // Get current location (dev override or real location)
+  const getCurrentLocation = () => {
+    if (__DEV__ && devLocation) {
+      return devLocation;
+    }
+    return location;
+  };
 
   // Initialize location on mount
   useEffect(() => {
@@ -66,23 +79,24 @@ export default function MapScreen() {
   // Use a ref to track previous location to avoid unnecessary filtering
   const prevLocationRef = useRef<{ lat: number; lon: number } | null>(null);
   useEffect(() => {
-    if (!location || spawns.length === 0) return;
+    const currentLoc = getCurrentLocation();
+    if (!currentLoc || spawns.length === 0) return;
     
     // Only re-filter if location changed significantly (more than 50m)
     const shouldRefilter = !prevLocationRef.current || 
       calculateDistance(
         prevLocationRef.current.lat,
         prevLocationRef.current.lon,
-        location.latitude,
-        location.longitude
+        currentLoc.latitude,
+        currentLoc.longitude
       ) > 50;
     
     if (shouldRefilter) {
       // Re-filter spawns to only show visible ones
       const visibleSpawns = spawns.filter(spawn => {
         const distance = calculateDistance(
-          location.latitude,
-          location.longitude,
+          currentLoc.latitude,
+          currentLoc.longitude,
           spawn.latitude,
           spawn.longitude
         );
@@ -95,21 +109,22 @@ export default function MapScreen() {
         console.log(`📍 Location changed: ${visibleSpawns.length} visible spawns (filtered from ${spawns.length})`);
       }
       
-      prevLocationRef.current = { lat: location.latitude, lon: location.longitude };
+      prevLocationRef.current = { lat: currentLoc.latitude, lon: currentLoc.longitude };
     }
-  }, [location?.latitude, location?.longitude]);
+  }, [location?.latitude, location?.longitude, devLocation?.latitude, devLocation?.longitude]);
 
   // Periodic spawn refill check (every 30 seconds)
   // Uses visibility-based logic: only counts visible spawns
   useEffect(() => {
-    if (!user?.id || !location) return;
+    const currentLoc = getCurrentLocation();
+    if (!user?.id || !currentLoc) return;
 
     const interval = setInterval(async () => {
       // Filter to only visible spawns (within visibility radius)
       const visibleSpawns = spawns.filter(spawn => {
         const distance = calculateDistance(
-          location.latitude,
-          location.longitude,
+          currentLoc.latitude,
+          currentLoc.longitude,
           spawn.latitude,
           spawn.longitude
         );
@@ -121,8 +136,8 @@ export default function MapScreen() {
         console.log(`🔄 Periodic check: Low visible spawns detected (${visibleSpawns.length} visible, ${spawns.length} total), refilling...`);
         const newSpawns = await refillPersonalSpawns(
           user.id,
-          location.latitude,
-          location.longitude,
+          currentLoc.latitude,
+          currentLoc.longitude,
           visibleSpawns.length
         );
         
@@ -133,7 +148,7 @@ export default function MapScreen() {
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [user?.id, location, spawns]);
+  }, [user?.id, location, devLocation, spawns]);
 
   const initializeLocation = async () => {
     try {
@@ -174,14 +189,60 @@ export default function MapScreen() {
     });
   };
 
+  // Dev joystick handlers
+  const handleJoystickMove = (latDelta: number, lonDelta: number) => {
+    const currentLoc = getCurrentLocation();
+    if (currentLoc) {
+      const newLocation = {
+        latitude: currentLoc.latitude + latDelta,
+        longitude: currentLoc.longitude + lonDelta,
+      };
+      setDevLocation(newLocation);
+
+      // Update map camera
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          ...newLocation,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 100);
+      }
+
+      // Reload spawns with new location (force reload for joystick movement)
+      loadSpawnsForLocation(newLocation, true);
+    }
+  };
+
+  const handleJoystickToggle = () => {
+    setJoystickActive(!joystickActive);
+    if (!joystickActive && location) {
+      // Initialize dev location to current real location
+      setDevLocation(location);
+    } else {
+      // Reset to real location
+      setDevLocation(null);
+      if (location) {
+        loadSpawnsForLocation(location, true);
+      }
+    }
+  };
+
   // Simple spawn loading - just get or generate spawns
   // Uses visibility-based system: filters spawns by visibility radius
   const loadSpawns = async () => {
-    if (!user?.id || !location) return;
+    const currentLoc = getCurrentLocation();
+    if (!user?.id || !currentLoc) return;
+    await loadSpawnsForLocation(currentLoc);
+  };
+
+  const loadSpawnsForLocation = async (loc: { latitude: number; longitude: number }, forceReload = false) => {
+    if (!user?.id) return;
     
-    // Prevent duplicate loading
-    if (spawnsLoadedRef.current) return;
-    spawnsLoadedRef.current = true;
+    // Prevent duplicate loading on initial mount (unless forced)
+    if (!forceReload && spawnsLoadedRef.current) return;
+    if (!forceReload) {
+      spawnsLoadedRef.current = true;
+    }
     
     setLoadingSpawns(true);
     try {
@@ -190,16 +251,16 @@ export default function MapScreen() {
       // Use the new visibility-based generation system
       const result = await generatePersonalSpawns(
         user.id,
-        location.latitude,
-        location.longitude
+        loc.latitude,
+        loc.longitude
       );
       
       if (!result.error && result.spawns.length > 0) {
         // Filter spawns to only show visible ones (within visibility radius)
         const visibleSpawns = result.spawns.filter(spawn => {
           const distance = calculateDistance(
-            location.latitude,
-            location.longitude,
+            loc.latitude,
+            loc.longitude,
             spawn.latitude,
             spawn.longitude
           );
@@ -390,12 +451,11 @@ export default function MapScreen() {
   };
 
   const centerOnUserLocation = async () => {
-    const loc = await getCurrentLocation();
-    if (loc && mapRef.current) {
-      setLocation(loc);
+    const currentLoc = getCurrentLocation();
+    if (currentLoc && mapRef.current) {
       mapRef.current.animateToRegion({
-        latitude: loc.latitude,
-        longitude: loc.longitude,
+        latitude: currentLoc.latitude,
+        longitude: currentLoc.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       }, 500);
@@ -413,13 +473,14 @@ export default function MapScreen() {
     setSpawns(remainingSpawns);
     setSelectedSpawn(null);
     
-    if (!user?.id || !location) return;
+    const currentLoc = getCurrentLocation();
+    if (!user?.id || !currentLoc) return;
     
     // Filter to only visible spawns (within visibility radius)
     const visibleSpawns = remainingSpawns.filter(spawn => {
       const distance = calculateDistance(
-        location.latitude,
-        location.longitude,
+        currentLoc.latitude,
+        currentLoc.longitude,
         spawn.latitude,
         spawn.longitude
       );
@@ -432,8 +493,8 @@ export default function MapScreen() {
       try {
         const newSpawns = await refillPersonalSpawns(
           user.id,
-          location.latitude,
-          location.longitude,
+          currentLoc.latitude,
+          currentLoc.longitude,
           visibleSpawns.length
         );
         
@@ -441,8 +502,8 @@ export default function MapScreen() {
           // Filter new spawns to only include visible ones
           const visibleNewSpawns = newSpawns.filter(spawn => {
             const distance = calculateDistance(
-              location.latitude,
-              location.longitude,
+              currentLoc.latitude,
+              currentLoc.longitude,
               spawn.latitude,
               spawn.longitude
             );
@@ -455,7 +516,7 @@ export default function MapScreen() {
         console.error('Error refilling spawns:', error);
       }
     }
-  }, [spawns, user?.id, location]);
+  }, [spawns, user?.id, location, devLocation]);
 
   const handleCloseModal = useCallback(() => {
     setShowCollectionModal(false);
@@ -620,7 +681,7 @@ export default function MapScreen() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
-        showsUserLocation
+        showsUserLocation={!(__DEV__ && devLocation)}
         showsMyLocationButton={false}
         mapType={Platform.OS === 'android' ? "standard" : "standard"}
         showsPointsOfInterest={false}
@@ -628,12 +689,35 @@ export default function MapScreen() {
         showsTraffic={false}
         showsCompass={false}
       >
+        {/* DEV: 1km visibility circle */}
+        {__DEV__ && getCurrentLocation() && (
+          <Circle
+            center={getCurrentLocation()!}
+            radius={1000} // 1km in meters
+            fillColor="rgba(124, 58, 237, 0.1)"
+            strokeColor="rgba(124, 58, 237, 0.4)"
+            strokeWidth={2}
+          />
+        )}
+
+        {/* Custom user marker for dev mode override */}
+        {__DEV__ && getCurrentLocation() && devLocation && (
+          <Marker
+            coordinate={getCurrentLocation()!}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.userMarker}>
+              <View style={styles.userMarkerInner} />
+            </View>
+          </Marker>
+        )}
+
         {/* Render personal spawn markers */}
         {spawns.map((spawn) => (
           <PersonalSpawnMarker
             key={spawn.id}
             spawn={spawn}
-            userLocation={location}
+            userLocation={getCurrentLocation() || location}
             onPress={handleSpawnPress}
             showCollectionRadius={true}
           />
@@ -674,12 +758,21 @@ export default function MapScreen() {
         />
       </TouchableOpacity>
 
+      {/* DEV: Location Joystick */}
+      {__DEV__ && (
+        <LocationJoystick
+          onMove={handleJoystickMove}
+          onToggle={handleJoystickToggle}
+          isActive={joystickActive}
+        />
+      )}
+
       {/* Collection Modal */}
       {user && (
         <CollectionModal
           visible={showCollectionModal}
           spawn={selectedSpawn}
-          userLocation={location}
+          userLocation={getCurrentLocation() || location}
           userId={user.id}
           onClose={handleCloseModal}
           onCollected={handleCollected}
@@ -912,5 +1005,27 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
     textAlign: 'center',
+  },
+  userMarker: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#7C3AED',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  userMarkerInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    position: 'absolute',
+    top: 3,
+    left: 3,
   },
 });
