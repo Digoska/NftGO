@@ -13,6 +13,9 @@ import MapView from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentLocation, calculateDistance } from '../../lib/location';
 import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
+
+// Import visibility radius constant
+const VISIBILITY_RADIUS_METERS = SPAWN_CONFIG.VISIBILITY_RADIUS_METERS || 1000;
 import { getTimeRemaining } from '../../lib/collectNFT';
 import { supabase } from '../../lib/supabase';
 import { Location as LocationType, PersonalSpawn } from '../../types';
@@ -59,19 +62,68 @@ export default function MapScreen() {
     }
   }, [user?.id, location]);
 
+  // Filter spawns by visibility when location changes significantly
+  // Use a ref to track previous location to avoid unnecessary filtering
+  const prevLocationRef = useRef<{ lat: number; lon: number } | null>(null);
+  useEffect(() => {
+    if (!location || spawns.length === 0) return;
+    
+    // Only re-filter if location changed significantly (more than 50m)
+    const shouldRefilter = !prevLocationRef.current || 
+      calculateDistance(
+        prevLocationRef.current.lat,
+        prevLocationRef.current.lon,
+        location.latitude,
+        location.longitude
+      ) > 50;
+    
+    if (shouldRefilter) {
+      // Re-filter spawns to only show visible ones
+      const visibleSpawns = spawns.filter(spawn => {
+        const distance = calculateDistance(
+          location.latitude,
+          location.longitude,
+          spawn.latitude,
+          spawn.longitude
+        );
+        return distance <= VISIBILITY_RADIUS_METERS;
+      });
+      
+      // Only update if the count changed (avoid unnecessary re-renders)
+      if (visibleSpawns.length !== spawns.length) {
+        setSpawns(visibleSpawns);
+        console.log(`📍 Location changed: ${visibleSpawns.length} visible spawns (filtered from ${spawns.length})`);
+      }
+      
+      prevLocationRef.current = { lat: location.latitude, lon: location.longitude };
+    }
+  }, [location?.latitude, location?.longitude]);
+
   // Periodic spawn refill check (every 30 seconds)
+  // Uses visibility-based logic: only counts visible spawns
   useEffect(() => {
     if (!user?.id || !location) return;
 
     const interval = setInterval(async () => {
-      // Only refill if we are low on spawns
-      if (spawns.length < 7) {
-        console.log('🔄 Periodic check: Low spawns detected, refilling...');
+      // Filter to only visible spawns (within visibility radius)
+      const visibleSpawns = spawns.filter(spawn => {
+        const distance = calculateDistance(
+          location.latitude,
+          location.longitude,
+          spawn.latitude,
+          spawn.longitude
+        );
+        return distance <= VISIBILITY_RADIUS_METERS;
+      });
+      
+      // Only refill if visible spawns are low
+      if (visibleSpawns.length < 7) {
+        console.log(`🔄 Periodic check: Low visible spawns detected (${visibleSpawns.length} visible, ${spawns.length} total), refilling...`);
         const newSpawns = await refillPersonalSpawns(
           user.id,
           location.latitude,
           location.longitude,
-          spawns.length
+          visibleSpawns.length
         );
         
         if (newSpawns.length > 0) {
@@ -81,7 +133,7 @@ export default function MapScreen() {
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [user?.id, location, spawns.length]);
+  }, [user?.id, location, spawns]);
 
   const initializeLocation = async () => {
     try {
@@ -123,6 +175,7 @@ export default function MapScreen() {
   };
 
   // Simple spawn loading - just get or generate spawns
+  // Uses visibility-based system: filters spawns by visibility radius
   const loadSpawns = async () => {
     if (!user?.id || !location) return;
     
@@ -134,33 +187,7 @@ export default function MapScreen() {
     try {
       console.log('📍 Loading spawns for user...');
       
-      // First, try to get existing active spawns
-      const { data: existingSpawns, error: fetchError } = await supabase
-        .from('personal_spawns')
-        .select(`
-          *,
-          nft:nfts(*)
-        `)
-        .eq('user_id', user.id)
-        .eq('collected', false)
-        .gt('expires_at', new Date().toISOString());
-      
-      if (fetchError) {
-        console.error('Error fetching spawns:', fetchError);
-        return;
-      }
-      
-      console.log(`Found ${existingSpawns?.length || 0} existing spawns`);
-      
-      // If we have enough spawns, use them
-      if (existingSpawns && existingSpawns.length >= 5) {
-        setSpawns(existingSpawns as PersonalSpawn[]);
-        console.log(`✅ Using ${existingSpawns.length} existing spawns`);
-        return;
-      }
-      
-      // If not enough spawns, generate new ones
-      console.log('Not enough spawns, generating new ones...');
+      // Use the new visibility-based generation system
       const result = await generatePersonalSpawns(
         user.id,
         location.latitude,
@@ -168,19 +195,29 @@ export default function MapScreen() {
       );
       
       if (!result.error && result.spawns.length > 0) {
-        setSpawns(result.spawns);
-        console.log(`✅ Generated ${result.spawns.length} spawns`);
+        // Filter spawns to only show visible ones (within visibility radius)
+        const visibleSpawns = result.spawns.filter(spawn => {
+          const distance = calculateDistance(
+            location.latitude,
+            location.longitude,
+            spawn.latitude,
+            spawn.longitude
+          );
+          return distance <= VISIBILITY_RADIUS_METERS;
+        });
+        
+        setSpawns(visibleSpawns);
+        console.log(`✅ Loaded ${visibleSpawns.length} visible spawns (${result.spawns.length} total)`);
         
         // Log rarity distribution
-        const distribution = result.spawns.reduce((acc, s) => {
+        const distribution = visibleSpawns.reduce((acc, s) => {
           const rarity = s.nft?.rarity || 'unknown';
           acc[rarity] = (acc[rarity] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
         console.log('Rarity distribution:', distribution);
-      } else if (existingSpawns && existingSpawns.length > 0) {
-        // Use whatever existing spawns we have
-        setSpawns(existingSpawns as PersonalSpawn[]);
+      } else {
+        setSpawns([]);
       }
     } catch (error) {
       console.error('Error loading spawns:', error);
@@ -376,19 +413,43 @@ export default function MapScreen() {
     setSpawns(remainingSpawns);
     setSelectedSpawn(null);
     
-    // Trigger refill if low on spawns
-    if (remainingSpawns.length < 7 && user?.id && location) {
-      console.log('🔄 Collection triggered refill...');
+    if (!user?.id || !location) return;
+    
+    // Filter to only visible spawns (within visibility radius)
+    const visibleSpawns = remainingSpawns.filter(spawn => {
+      const distance = calculateDistance(
+        location.latitude,
+        location.longitude,
+        spawn.latitude,
+        spawn.longitude
+      );
+      return distance <= VISIBILITY_RADIUS_METERS;
+    });
+    
+    // Trigger refill if low on visible spawns
+    if (visibleSpawns.length < 7) {
+      console.log(`🔄 Collection triggered refill... (${visibleSpawns.length} visible, ${remainingSpawns.length} total)`);
       try {
         const newSpawns = await refillPersonalSpawns(
           user.id,
           location.latitude,
           location.longitude,
-          remainingSpawns.length
+          visibleSpawns.length
         );
         
         if (newSpawns.length > 0) {
-          setSpawns(prev => [...prev, ...newSpawns]);
+          // Filter new spawns to only include visible ones
+          const visibleNewSpawns = newSpawns.filter(spawn => {
+            const distance = calculateDistance(
+              location.latitude,
+              location.longitude,
+              spawn.latitude,
+              spawn.longitude
+            );
+            return distance <= VISIBILITY_RADIUS_METERS;
+          });
+          
+          setSpawns(prev => [...prev, ...visibleNewSpawns]);
         }
       } catch (error) {
         console.error('Error refilling spawns:', error);

@@ -1,21 +1,30 @@
 import { supabase } from './supabase';
-import { generateRandomPoint, calculateDistance, isWithinRadius } from './location';
+import { generateRandomPoint, calculateDistance, isWithinRadius, calculateBearing } from './location';
 import { PersonalSpawn, NFT } from '../types';
 
 // Configuration constants
 const SPAWN_COUNT_MIN = 5;
 const SPAWN_COUNT_MAX = 10;
-const SPAWN_RADIUS_METERS = 500;
+const SPAWN_RADIUS_METERS = 1000; // Generation radius: 1000m
 const SPAWN_COLLECTION_RADIUS = 50;
 const SPAWN_EXPIRATION_HOURS = 1; // 1 hour expiration
 const DUPLICATE_CHECK_RADIUS = 100; // Don't regenerate if user is within 100m of last spawn location
 
+// Visibility and cleanup radii for new spawn system
+const VISIBILITY_RADIUS_METERS = 1000; // Show/hide spawns based on distance
+const CLEANUP_RADIUS_METERS = 2000; // Delete spawns beyond this distance
+
+// Sector-based balancing constants
+const SECTOR_COUNT = 8; // Divide area into 8 compass directions
+const SECTOR_SIZE = 360 / SECTOR_COUNT; // 45 degrees per sector
+const MAX_SECTOR_IMBALANCE = 2; // Threshold to trigger balancing
+
 // Rarity weights for PERSONAL spawns only (must sum to 100)
 // LEGENDARY is reserved for global spawns (Phase 2) - NOT included here
 const RARITY_WEIGHTS = {
-  common: 40,   // 40%
-  rare: 30,     // 30%
-  epic: 30,     // 30%
+  common: 80,   // 80%
+  rare: 16,     // 16%
+  epic: 4,      // 4%
   // legendary: RESERVED FOR GLOBAL SPAWNS ONLY
 };
 
@@ -112,7 +121,112 @@ async function selectRandomNFT(): Promise<NFT | null> {
 }
 
 /**
+ * Checks if a spawn is within visibility range of the user
+ */
+function isSpawnVisible(
+  userLat: number,
+  userLon: number,
+  spawnLat: number,
+  spawnLon: number
+): boolean {
+  const distance = calculateDistance(userLat, userLon, spawnLat, spawnLon);
+  return distance <= VISIBILITY_RADIUS_METERS;
+}
+
+/**
+ * Gets all visible spawns for a user (within visibility radius)
+ */
+async function getVisibleSpawns(
+  userId: string,
+  userLat: number,
+  userLon: number
+): Promise<PersonalSpawn[]> {
+  const { data, error } = await supabase
+    .from('personal_spawns')
+    .select(`
+      *,
+      nft:nfts(*)
+    `)
+    .eq('user_id', userId)
+    .eq('collected', false)
+    .gt('expires_at', new Date().toISOString());
+  
+  if (error) {
+    console.error('Error fetching active spawns:', error);
+    return [];
+  }
+  
+  if (!data || data.length === 0) {
+    return [];
+  }
+  
+  // Filter to only include spawns within visibility radius
+  const visibleSpawns = data.filter(spawn => 
+    isSpawnVisible(userLat, userLon, spawn.latitude, spawn.longitude)
+  );
+  
+  return visibleSpawns as PersonalSpawn[];
+}
+
+/**
+ * Gets the sector index (0-7) from a bearing angle (0-360°)
+ */
+function getSectorFromAngle(angle: number): number {
+  // Normalize angle to 0-360
+  const normalizedAngle = ((angle % 360) + 360) % 360;
+  // Calculate sector index
+  return Math.floor(normalizedAngle / SECTOR_SIZE);
+}
+
+/**
+ * Counts spawns per sector (8 sectors total)
+ * Returns an array of 8 counts, one for each sector
+ */
+function countSpawnsPerSector(
+  spawns: PersonalSpawn[],
+  userLat: number,
+  userLon: number
+): number[] {
+  const sectorCounts = new Array(SECTOR_COUNT).fill(0);
+  
+  for (const spawn of spawns) {
+    const bearing = calculateBearing(userLat, userLon, spawn.latitude, spawn.longitude);
+    const sectorIndex = getSectorFromAngle(bearing);
+    sectorCounts[sectorIndex]++;
+  }
+  
+  return sectorCounts;
+}
+
+/**
+ * Selects a balanced sector for new spawn placement
+ * If imbalance is too high, returns a sector with minimum count
+ * Otherwise, returns a random sector for natural variation
+ */
+function selectBalancedSector(sectorCounts: number[]): number {
+  const maxCount = Math.max(...sectorCounts);
+  const minCount = Math.min(...sectorCounts);
+  const imbalance = maxCount - minCount;
+  
+  // If imbalance exceeds threshold, select a sector with minimum count
+  if (imbalance > MAX_SECTOR_IMBALANCE) {
+    const minSectors: number[] = [];
+    for (let i = 0; i < sectorCounts.length; i++) {
+      if (sectorCounts[i] === minCount) {
+        minSectors.push(i);
+      }
+    }
+    // Randomly select from sectors with minimum count
+    return minSectors[Math.floor(Math.random() * minSectors.length)];
+  }
+  
+  // Otherwise, return random sector for natural variation
+  return Math.floor(Math.random() * SECTOR_COUNT);
+}
+
+/**
  * Checks if user has active spawns near a location
+ * @deprecated This function is kept for backward compatibility but will be replaced by visibility-based system
  */
 async function hasActiveSpawnsNearLocation(
   userId: string,
@@ -158,6 +272,7 @@ async function hasActiveSpawnsNearLocation(
 
 /**
  * Generates new personal spawns for a user at their current location
+ * Uses sector-based balancing to prevent clustering
  */
 async function createNewSpawns(
   userId: string,
@@ -178,12 +293,26 @@ async function createNewSpawns(
   console.log(`🕐 Expiration time: ${expiresAt}`);
   console.log(`🕐 Expires in ${SPAWN_EXPIRATION_HOURS} hour(s) (${SPAWN_EXPIRATION_HOURS * 60} minutes)`);
   
+  // Get currently visible spawns to calculate sector distribution
+  const visibleSpawns = await getVisibleSpawns(userId, userLat, userLon);
+  let sectorCounts = countSpawnsPerSector(visibleSpawns, userLat, userLon);
+  
+  console.log(`Current sector distribution: [${sectorCounts.join(', ')}]`);
+  
   for (let i = 0; i < spawnCount; i++) {
     const nft = await selectRandomNFT();
     if (!nft) continue;
     
-    // Generate random location within spawn radius
-    const location = generateRandomPoint(userLat, userLon, SPAWN_RADIUS_METERS);
+    // Select a balanced sector for this spawn
+    const selectedSector = selectBalancedSector(sectorCounts);
+    
+    // Generate random location within spawn radius in the selected sector
+    const location = generateRandomPoint(
+      userLat,
+      userLon,
+      SPAWN_RADIUS_METERS,
+      { sectorIndex: selectedSector, sectorSize: SECTOR_SIZE }
+    );
     
     spawns.push({
       user_id: userId,
@@ -194,6 +323,9 @@ async function createNewSpawns(
       expires_at: expiresAt,
       collected: false,
     });
+    
+    // Increment sector count for next iteration
+    sectorCounts[selectedSector]++;
   }
   
   if (spawns.length === 0) {
@@ -255,9 +387,12 @@ export async function refillPersonalSpawns(
 /**
  * Main function to generate personal spawns for a user
  * 
- * - Checks if user has active spawns within 100m
- * - If yes, returns existing spawns
- * - If no, generates 5-10 new random spawns within 500m radius
+ * Visibility-based spawning system:
+ * - Cleans up distant spawns (beyond 2000m) first
+ * - Gets all visible spawns (within 1000m)
+ * - If visible spawns >= 7, returns existing visible spawns
+ * - If visible spawns < 7, generates new spawns to reach target (7-10 total)
+ * - Spawns outside 1000m are ignored but remain in database
  */
 export async function generatePersonalSpawns(
   userId: string,
@@ -265,22 +400,38 @@ export async function generatePersonalSpawns(
   userLon: number
 ): Promise<{ spawns: PersonalSpawn[]; isNew: boolean; error?: string }> {
   try {
-    // Check for existing active spawns near user
-    const { hasSpawns, spawns: existingSpawns } = await hasActiveSpawnsNearLocation(
-      userId,
-      userLat,
-      userLon,
-      DUPLICATE_CHECK_RADIUS
-    );
+    // Clean up distant spawns first (beyond cleanup radius)
+    await cleanupDistantSpawns(userId, userLat, userLon);
     
-    if (hasSpawns && existingSpawns.length > 0) {
-      console.log(`User has ${existingSpawns.length} active spawns nearby, returning existing`);
-      return { spawns: existingSpawns, isNew: false };
+    // Get all visible spawns (within visibility radius)
+    const visibleSpawns = await getVisibleSpawns(userId, userLat, userLon);
+    
+    console.log(`Found ${visibleSpawns.length} visible spawns (within ${VISIBILITY_RADIUS_METERS}m)`);
+    
+    // Target: 7-10 spawns visible
+    const targetMin = 7;
+    const targetMax = 10;
+    
+    // If we have enough visible spawns, return them
+    if (visibleSpawns.length >= targetMin) {
+      console.log(`User has ${visibleSpawns.length} visible spawns (target: ${targetMin}-${targetMax}), returning existing`);
+      return { spawns: visibleSpawns, isNew: false };
     }
     
+    // Calculate how many new spawns to generate
+    const neededMin = targetMin - visibleSpawns.length;
+    const neededMax = targetMax - visibleSpawns.length;
+    const countToGenerate = Math.floor(Math.random() * (neededMax - neededMin + 1)) + neededMin;
+    
+    console.log(`Generating ${countToGenerate} new spawns to reach target (current: ${visibleSpawns.length}, target: ${targetMin}-${targetMax})`);
+    
     // Generate new spawns
-    const newSpawns = await createNewSpawns(userId, userLat, userLon);
-    return { spawns: newSpawns, isNew: true };
+    const newSpawns = await createNewSpawns(userId, userLat, userLon, countToGenerate);
+    
+    // Combine visible spawns with new spawns
+    const allSpawns = [...visibleSpawns, ...newSpawns];
+    
+    return { spawns: allSpawns, isNew: newSpawns.length > 0 };
     
   } catch (error) {
     console.error('Error in generatePersonalSpawns:', error);
@@ -340,6 +491,72 @@ export async function cleanupExpiredSpawns(userId: string): Promise<number> {
   }
   
   return count;
+}
+
+/**
+ * Cleans up spawns that are too far away from the user (beyond cleanup radius)
+ * This prevents database bloat from spawns that are no longer relevant
+ */
+async function cleanupDistantSpawns(
+  userId: string,
+  userLat: number,
+  userLon: number
+): Promise<number> {
+  try {
+    // Fetch all active (uncollected) spawns
+    const { data, error } = await supabase
+      .from('personal_spawns')
+      .select('id, latitude, longitude')
+      .eq('user_id', userId)
+      .eq('collected', false)
+      .gt('expires_at', new Date().toISOString());
+    
+    if (error) {
+      console.error('Error fetching spawns for cleanup:', error);
+      return 0;
+    }
+    
+    if (!data || data.length === 0) {
+      return 0;
+    }
+    
+    // Find spawns beyond cleanup radius
+    const distantSpawnIds: string[] = [];
+    for (const spawn of data) {
+      const distance = calculateDistance(
+        userLat,
+        userLon,
+        spawn.latitude,
+        spawn.longitude
+      );
+      
+      if (distance > CLEANUP_RADIUS_METERS) {
+        distantSpawnIds.push(spawn.id);
+      }
+    }
+    
+    if (distantSpawnIds.length === 0) {
+      return 0;
+    }
+    
+    // Delete distant spawns
+    const { error: deleteError } = await supabase
+      .from('personal_spawns')
+      .delete()
+      .in('id', distantSpawnIds);
+    
+    if (deleteError) {
+      console.error('Error deleting distant spawns:', deleteError);
+      return 0;
+    }
+    
+    console.log(`Cleaned up ${distantSpawnIds.length} distant spawns (beyond ${CLEANUP_RADIUS_METERS}m)`);
+    return distantSpawnIds.length;
+    
+  } catch (error) {
+    console.error('Error in cleanupDistantSpawns:', error);
+    return 0;
+  }
 }
 
 /**
@@ -422,6 +639,8 @@ export const SPAWN_CONFIG = {
   SPAWN_COLLECTION_RADIUS,
   SPAWN_EXPIRATION_HOURS,
   DUPLICATE_CHECK_RADIUS,
+  VISIBILITY_RADIUS_METERS,
+  CLEANUP_RADIUS_METERS,
   RARITY_WEIGHTS,
 };
 

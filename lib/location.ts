@@ -124,21 +124,64 @@ export function isWithinRadius(
   return calculateDistance(lat1, lon1, lat2, lon2) <= radiusMeters;
 }
 
+/**
+ * Calculates the bearing angle from one point to another
+ * @param lat1 Starting latitude
+ * @param lon1 Starting longitude
+ * @param lat2 Target latitude
+ * @param lon2 Target longitude
+ * @returns Bearing in degrees (0-360), where 0° = North, 90° = East, 180° = South, 270° = West
+ */
+export function calculateBearing(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) -
+    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+
+  const θ = Math.atan2(y, x);
+  const bearing = ((θ * 180) / Math.PI + 360) % 360; // Convert to degrees and normalize to 0-360
+
+  return bearing;
+}
+
 export function generateRandomPoint(
   centerLat: number,
   centerLon: number,
-  radiusMeters: number
+  radiusMeters: number,
+  targetSector?: { sectorIndex: number; sectorSize: number }
 ): { latitude: number; longitude: number } {
   // Convert radius from meters to degrees (approximate)
   // 1 degree latitude is approx 111,320 meters
   const r = radiusMeters / 111320;
   
   const u = Math.random();
-  const v = Math.random();
+  let t: number;
+  
+  if (targetSector !== undefined) {
+    // Generate angle within the specified sector
+    const sectorStartAngle = targetSector.sectorIndex * targetSector.sectorSize;
+    const sectorEndAngle = sectorStartAngle + targetSector.sectorSize;
+    // Convert to radians and generate random angle within sector
+    const sectorStartRad = (sectorStartAngle * Math.PI) / 180;
+    const sectorEndRad = (sectorEndAngle * Math.PI) / 180;
+    t = sectorStartRad + Math.random() * (sectorEndRad - sectorStartRad);
+  } else {
+    // Random angle 0-360° (existing behavior)
+    const v = Math.random();
+    t = 2 * Math.PI * v;
+  }
   
   // Use square root of u to ensure uniform distribution within circle
   const w = r * Math.sqrt(u);
-  const t = 2 * Math.PI * v;
   
   const x = w * Math.cos(t);
   const y = w * Math.sin(t);
