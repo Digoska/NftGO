@@ -11,7 +11,7 @@ import {
 import Constants from 'expo-constants';
 import MapView, { Marker, Circle } from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentLocation, calculateDistance } from '../../lib/location';
+import { getCurrentLocation as fetchLocationFromDevice, calculateDistance } from '../../lib/location';
 import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
 
 // Import visibility radius constant
@@ -32,8 +32,24 @@ import LocationJoystick from '../../components/dev/LocationJoystick';
 // Check if we're in Expo Go (maps won't work)
 const isExpoGo = Constants.appOwnership === 'expo';
 
+// ============================================================================
+// BEFORE PRODUCTION DEPLOYMENT:
+// Set FORCE_DEV_MODE = false to disable dev tools in release builds
+// ============================================================================
+const FORCE_DEV_MODE = true; // Set to false before Play Store submission
+
+/**
+ * Determines if dev mode should be enabled
+ * @returns true if in development mode OR FORCE_DEV_MODE is enabled
+ */
+const isDevMode = (): boolean => {
+  return __DEV__ || FORCE_DEV_MODE;
+};
+
 export default function MapScreen() {
+  console.log('🔍 LOCATION: MapScreen component rendering');
   const { user } = useAuth();
+  console.log('🔍 LOCATION: User from auth:', user?.id ? 'exists' : 'null');
   const [location, setLocation] = useState<LocationType | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSpawns, setLoadingSpawns] = useState(false);
@@ -44,14 +60,21 @@ export default function MapScreen() {
   // Dev mode: location override and joystick
   const [devLocation, setDevLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [joystickActive, setJoystickActive] = useState(false);
+  const devLocationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  console.log('🔍 LOCATION: Initial state values - location:', location, 'loading:', loading, 'devLocation:', devLocation, 'joystickActive:', joystickActive);
   
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const spawnsLoadedRef = useRef(false);
 
-  // Get current location (dev override or real location)
-  const getCurrentLocation = () => {
-    if (__DEV__ && devLocation) {
+  // Get current location (dev override or real location) - helper function
+  const getCurrentActiveLocation = () => {
+    // Prioritize ref value during active joystick movement (immediate updates)
+    if (isDevMode() && joystickActive && devLocationRef.current) {
+      return devLocationRef.current;
+    }
+    // Fall back to state if ref is empty
+    if (isDevMode() && devLocation) {
       return devLocation;
     }
     return location;
@@ -59,9 +82,13 @@ export default function MapScreen() {
 
   // Initialize location on mount
   useEffect(() => {
+    console.log('🔍 LOCATION: useEffect for initializeLocation() started');
+    console.log('🔍 LOCATION: Current state - location:', location, 'loading:', loading, 'devLocation:', devLocation, 'joystickActive:', joystickActive);
+    console.log('🔍 LOCATION: Calling initializeLocation()...');
     initializeLocation();
     
     return () => {
+      console.log('🔍 LOCATION: useEffect cleanup - removing location subscription');
       if (locationSubscription.current) {
         locationSubscription.current.remove();
       }
@@ -70,8 +97,13 @@ export default function MapScreen() {
 
   // Load spawns ONCE when user and location are available
   useEffect(() => {
+    console.log('🔍 LOCATION: loadSpawns useEffect triggered - user?.id:', user?.id, 'location:', location, 'spawnsLoadedRef.current:', spawnsLoadedRef.current);
     if (user?.id && location && !spawnsLoadedRef.current) {
-      loadSpawns();
+      console.log('🔍 LOCATION: Conditions met, calling loadSpawnsForLocation...');
+      // Use location coords directly, not getCurrentActiveLocation() helper
+      loadSpawnsForLocation(location, false);
+    } else {
+      console.log('🔍 LOCATION: loadSpawns conditions not met - skipping');
     }
   }, [user?.id, location]);
 
@@ -79,7 +111,7 @@ export default function MapScreen() {
   // Use a ref to track previous location to avoid unnecessary filtering
   const prevLocationRef = useRef<{ lat: number; lon: number } | null>(null);
   useEffect(() => {
-    const currentLoc = getCurrentLocation();
+    const currentLoc = getCurrentActiveLocation();
     if (!currentLoc || spawns.length === 0) return;
     
     // Only re-filter if location changed significantly (more than 50m)
@@ -116,7 +148,7 @@ export default function MapScreen() {
   // Periodic spawn refill check (every 30 seconds)
   // Uses visibility-based logic: only counts visible spawns
   useEffect(() => {
-    const currentLoc = getCurrentLocation();
+    const currentLoc = getCurrentActiveLocation();
     if (!user?.id || !currentLoc) return;
 
     const interval = setInterval(async () => {
@@ -151,25 +183,39 @@ export default function MapScreen() {
   }, [user?.id, location, devLocation, spawns]);
 
   const initializeLocation = async () => {
+    console.log('🔍 LOCATION: initializeLocation() function called');
+    console.log('🔍 LOCATION: Current state before initialization - location:', location, 'loading:', loading);
     try {
-      const loc = await getCurrentLocation();
+      console.log('🔍 LOCATION: About to call fetchLocationFromDevice()...');
+      const loc = await fetchLocationFromDevice();
+      console.log('🔍 LOCATION: fetchLocationFromDevice() returned:', loc);
       if (loc) {
+        console.log('🔍 LOCATION: Location received, setting location state...');
         setLocation(loc);
+        console.log('🔍 LOCATION: Starting location watching...');
         startLocationWatching();
+        console.log('🔍 LOCATION: Location initialization successful');
       } else {
+        console.log('🔍 LOCATION: No location returned, showing alert...');
         Alert.alert(
           'Permissions',
           'NftGO needs access to your location. Please enable location access in settings.'
         );
+        console.log('🔍 LOCATION: Alert shown');
       }
     } catch (error) {
-      console.error('Error initializing location:', error);
+      console.error('🔍 LOCATION: Error in initializeLocation():', error);
+      console.error('🔍 LOCATION: Error details:', JSON.stringify(error, null, 2));
     } finally {
+      console.log('🔍 LOCATION: Setting loading to false');
       setLoading(false);
+      console.log('🔍 LOCATION: initializeLocation() completed');
     }
   };
 
   const startLocationWatching = () => {
+    console.log('🔍 LOCATION: startLocationWatching() called');
+    console.log('🔍 LOCATION: Setting up watchPositionAsync...');
     Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
@@ -177,26 +223,41 @@ export default function MapScreen() {
         distanceInterval: 50,
       },
       (newLocation) => {
+        console.log('🔍 LOCATION: watchPositionAsync callback triggered:', {
+          latitude: newLocation.coords.latitude,
+          longitude: newLocation.coords.longitude,
+          accuracy: newLocation.coords.accuracy,
+        });
         setLocation({
           latitude: newLocation.coords.latitude,
           longitude: newLocation.coords.longitude,
           accuracy: newLocation.coords.accuracy || undefined,
           timestamp: newLocation.timestamp,
         });
+        console.log('🔍 LOCATION: Location state updated from watchPositionAsync');
       }
     ).then((subscription) => {
+      console.log('🔍 LOCATION: watchPositionAsync subscription created:', subscription);
       locationSubscription.current = subscription;
+      console.log('🔍 LOCATION: Location watching started successfully');
+    }).catch((error) => {
+      console.error('🔍 LOCATION: Error in watchPositionAsync:', error);
     });
   };
 
   // Dev joystick handlers
   const handleJoystickMove = (latDelta: number, lonDelta: number) => {
-    const currentLoc = getCurrentLocation();
+    const currentLoc = getCurrentActiveLocation();
     if (currentLoc) {
       const newLocation = {
         latitude: currentLoc.latitude + latDelta,
         longitude: currentLoc.longitude + lonDelta,
       };
+      
+      // Update ref immediately (no re-render, smooth animation)
+      devLocationRef.current = newLocation;
+      
+      // Update state (triggers re-render for React components)
       setDevLocation(newLocation);
 
       // Update map camera
@@ -208,29 +269,70 @@ export default function MapScreen() {
         }, 100);
       }
 
-      // Reload spawns with new location (force reload for joystick movement)
-      loadSpawnsForLocation(newLocation, true);
+      // Spawn reload is handled by debounced useEffect (see below)
     }
   };
 
   const handleJoystickToggle = () => {
-    setJoystickActive(!joystickActive);
-    if (!joystickActive && location) {
-      // Initialize dev location to current real location
-      setDevLocation(location);
+    // Before activating, check if userLocation exists
+    if (!joystickActive) {
+      if (!location) {
+        // Location not ready yet, don't activate
+        Alert.alert('Location Not Ready', 'Please wait for your location to be detected first.');
+        return;
+      }
+      // Activate joystick: verify location exists, set joystickActive, initialize devLocation
+      const initialLocation = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      };
+      setJoystickActive(true);
+      // Initialize both ref and state to same value
+      devLocationRef.current = initialLocation;
+      setDevLocation(initialLocation);
     } else {
-      // Reset to real location
+      // Deactivate: reset joystick, clear devLocation, reload spawns at real location
+      setJoystickActive(false);
+      // Clear both ref and state
+      devLocationRef.current = null;
       setDevLocation(null);
       if (location) {
+        // Reload spawns at real userLocation
         loadSpawnsForLocation(location, true);
+        // Re-center map on real userLocation
+        if (mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude: location.latitude,
+            longitude: location.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 500);
+        }
       }
     }
   };
 
+  // Debounced spawn reload after joystick movement stops
+  useEffect(() => {
+    // Only reload spawns when joystick is active and devLocation changes
+    if (!joystickActive || !devLocation) return;
+
+    // Set up debounce timer (500ms delay)
+    const timeoutId = setTimeout(() => {
+      // Reload spawns at the new location after movement stops
+      loadSpawnsForLocation(devLocation, true);
+    }, 500);
+
+    // Cleanup: clear timeout if devLocation changes again before delay completes
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [devLocation, joystickActive]);
+
   // Simple spawn loading - just get or generate spawns
   // Uses visibility-based system: filters spawns by visibility radius
   const loadSpawns = async () => {
-    const currentLoc = getCurrentLocation();
+    const currentLoc = getCurrentActiveLocation();
     if (!user?.id || !currentLoc) return;
     await loadSpawnsForLocation(currentLoc);
   };
@@ -451,7 +553,7 @@ export default function MapScreen() {
   };
 
   const centerOnUserLocation = async () => {
-    const currentLoc = getCurrentLocation();
+    const currentLoc = getCurrentActiveLocation();
     if (currentLoc && mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: currentLoc.latitude,
@@ -473,7 +575,7 @@ export default function MapScreen() {
     setSpawns(remainingSpawns);
     setSelectedSpawn(null);
     
-    const currentLoc = getCurrentLocation();
+    const currentLoc = getCurrentActiveLocation();
     if (!user?.id || !currentLoc) return;
     
     // Filter to only visible spawns (within visibility radius)
@@ -534,7 +636,9 @@ export default function MapScreen() {
     }
   };
 
+  console.log('🔍 LOCATION: Checking render conditions - loading:', loading, 'location:', location);
   if (loading) {
+    console.log('🔍 LOCATION: Rendering loading screen');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -544,6 +648,7 @@ export default function MapScreen() {
   }
 
   if (!location) {
+    console.log('🔍 LOCATION: Rendering error screen - no location available');
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
@@ -552,7 +657,10 @@ export default function MapScreen() {
           </Text>
           <Button
             title="Try Again"
-            onPress={initializeLocation}
+            onPress={() => {
+              console.log('🔍 LOCATION: Try Again button pressed');
+              initializeLocation();
+            }}
             style={styles.retryButton}
           />
         </View>
@@ -681,7 +789,7 @@ export default function MapScreen() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
-        showsUserLocation={!(__DEV__ && devLocation)}
+        showsUserLocation={true}
         showsMyLocationButton={false}
         mapType={Platform.OS === 'android' ? "standard" : "standard"}
         showsPointsOfInterest={false}
@@ -689,10 +797,10 @@ export default function MapScreen() {
         showsTraffic={false}
         showsCompass={false}
       >
-        {/* DEV: 1km visibility circle */}
-        {__DEV__ && getCurrentLocation() && (
+        {/* DEV: 1km visibility circle - only when joystick is active */}
+        {isDevMode() && joystickActive && getCurrentActiveLocation() && (
           <Circle
-            center={getCurrentLocation()!}
+            center={getCurrentActiveLocation()!}
             radius={1000} // 1km in meters
             fillColor="rgba(124, 58, 237, 0.1)"
             strokeColor="rgba(124, 58, 237, 0.4)"
@@ -700,14 +808,14 @@ export default function MapScreen() {
           />
         )}
 
-        {/* Custom user marker for dev mode override */}
-        {__DEV__ && getCurrentLocation() && devLocation && (
+        {/* Custom user marker for dev mode override - only when joystick is active */}
+        {isDevMode() && joystickActive && devLocation && (
           <Marker
-            coordinate={getCurrentLocation()!}
+            coordinate={devLocation}
             anchor={{ x: 0.5, y: 0.5 }}
           >
-            <View style={styles.userMarker}>
-              <View style={styles.userMarkerInner} />
+            <View style={styles.devMarker}>
+              <View style={styles.devMarkerInner} />
             </View>
           </Marker>
         )}
@@ -717,7 +825,7 @@ export default function MapScreen() {
           <PersonalSpawnMarker
             key={spawn.id}
             spawn={spawn}
-            userLocation={getCurrentLocation() || location}
+            userLocation={getCurrentActiveLocation() || location}
             onPress={handleSpawnPress}
             showCollectionRadius={true}
           />
@@ -759,7 +867,7 @@ export default function MapScreen() {
       </TouchableOpacity>
 
       {/* DEV: Location Joystick */}
-      {__DEV__ && (
+      {isDevMode() && (
         <LocationJoystick
           onMove={handleJoystickMove}
           onToggle={handleJoystickToggle}
@@ -772,7 +880,7 @@ export default function MapScreen() {
         <CollectionModal
           visible={showCollectionModal}
           spawn={selectedSpawn}
-          userLocation={getCurrentLocation() || location}
+          userLocation={getCurrentActiveLocation() || location}
           userId={user.id}
           onClose={handleCloseModal}
           onCollected={handleCollected}
@@ -1006,26 +1114,25 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
-  userMarker: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  devMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#7C3AED',
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: '#fff',
     shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  userMarkerInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-    position: 'absolute',
-    top: 3,
-    left: 3,
+  devMarkerInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#7C3AED',
   },
 });

@@ -3,29 +3,39 @@ import Constants from 'expo-constants';
 import { Location as LocationType } from '../types';
 
 export async function requestLocationPermissions(): Promise<boolean> {
+  console.log('🔍 LOCATION: requestLocationPermissions() called');
   try {
+    console.log('🔍 LOCATION: About to request foreground permissions...');
     // Request foreground permissions first
     const { status } = await Location.requestForegroundPermissionsAsync();
+    console.log('🔍 LOCATION: Foreground permission status:', status);
     
     if (status !== 'granted') {
+      console.log('🔍 LOCATION: Foreground permission denied, returning false');
       return false;
     }
 
+    console.log('🔍 LOCATION: Foreground permission granted, requesting background permissions...');
     // Only request background permissions if foreground is granted
     // Background permissions might not be available in Expo Go
     try {
       const backgroundStatus = await Location.requestBackgroundPermissionsAsync();
+      console.log('🔍 LOCATION: Background permission status:', backgroundStatus.status);
       if (backgroundStatus.status === 'granted') {
+        console.log('🔍 LOCATION: Background permission granted, returning true');
         return true;
       }
       // If background is denied but foreground is granted, that's okay
+      console.log('🔍 LOCATION: Background permission denied but foreground granted, returning true');
       return true;
     } catch (bgError) {
+      console.log('🔍 LOCATION: Background permission request error (expected in Expo Go):', bgError);
       // Background permissions might not be available (e.g., in Expo Go)
+      console.log('🔍 LOCATION: Background permission unavailable, returning true (foreground is enough)');
       return true; // Foreground permission is enough for basic functionality
     }
   } catch (error: any) {
-    console.error('Error requesting location permissions:', error);
+    console.error('🔍 LOCATION: Error requesting location permissions:', error);
     
     // If error is about missing Info.plist keys, provide helpful message
     if (error?.message?.includes('NSLocation') || error?.message?.includes('Info.plist')) {
@@ -34,29 +44,43 @@ export async function requestLocationPermissions(): Promise<boolean> {
       console.error('💡 Expo Go has limited location support');
     }
     
+    console.log('🔍 LOCATION: Returning false due to error');
     return false;
   }
 }
 
 export async function getCurrentLocation(): Promise<LocationType | null> {
+  console.log('🔍 LOCATION: getCurrentLocation() called');
   try {
+    console.log('🔍 LOCATION: Checking permissions...');
     const hasPermission = await requestLocationPermissions();
+    console.log('🔍 LOCATION: Permission check result:', hasPermission);
     if (!hasPermission) {
+      console.log('🔍 LOCATION: No permission, returning null');
       return null;
     }
 
+    console.log('🔍 LOCATION: Permission granted, getting current position...');
     const location = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.High,
     });
+    console.log('🔍 LOCATION: Current position retrieved:', {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      accuracy: location.coords.accuracy,
+    });
 
-    return {
+    const result = {
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
       accuracy: location.coords.accuracy || undefined,
       timestamp: location.timestamp,
     };
+    console.log('🔍 LOCATION: Returning location object:', result);
+    return result;
   } catch (error) {
-    console.error('Error getting current location:', error);
+    console.error('🔍 LOCATION: Error getting current location:', error);
+    console.log('🔍 LOCATION: Returning null due to error');
     return null;
   }
 }
