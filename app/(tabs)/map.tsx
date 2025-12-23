@@ -27,7 +27,6 @@ import PersonalSpawnMarker from '../../components/map/PersonalSpawnMarker';
 import CollectionModal from '../../components/map/CollectionModal';
 import { useAuth } from '../../lib/auth-context';
 import * as Location from 'expo-location';
-import LocationJoystick from '../../components/dev/LocationJoystick';
 
 // Check if we're in Expo Go (maps won't work)
 const isExpoGo = Constants.appOwnership === 'expo';
@@ -57,33 +56,16 @@ export default function MapScreen() {
   const [selectedSpawn, setSelectedSpawn] = useState<PersonalSpawn | null>(null);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   
-  // Dev mode: location override and joystick
-  const [devLocation, setDevLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [joystickActive, setJoystickActive] = useState(false);
-  const devLocationRef = useRef<{ latitude: number; longitude: number } | null>(null);
-  console.log('🔍 LOCATION: Initial state values - location:', location, 'loading:', loading, 'devLocation:', devLocation, 'joystickActive:', joystickActive);
+  console.log('🔍 LOCATION: Initial state values - location:', location, 'loading:', loading);
   
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const spawnsLoadedRef = useRef(false);
 
-  // Get current location (dev override or real location) - helper function
-  const getCurrentActiveLocation = () => {
-    // Prioritize ref value during active joystick movement (immediate updates)
-    if (isDevMode() && joystickActive && devLocationRef.current) {
-      return devLocationRef.current;
-    }
-    // Fall back to state if ref is empty
-    if (isDevMode() && devLocation) {
-      return devLocation;
-    }
-    return location;
-  };
-
   // Initialize location on mount
   useEffect(() => {
     console.log('🔍 LOCATION: useEffect for initializeLocation() started');
-    console.log('🔍 LOCATION: Current state - location:', location, 'loading:', loading, 'devLocation:', devLocation, 'joystickActive:', joystickActive);
+    console.log('🔍 LOCATION: Current state - location:', location, 'loading:', loading);
     console.log('🔍 LOCATION: Calling initializeLocation()...');
     initializeLocation();
     
@@ -100,7 +82,6 @@ export default function MapScreen() {
     console.log('🔍 LOCATION: loadSpawns useEffect triggered - user?.id:', user?.id, 'location:', location, 'spawnsLoadedRef.current:', spawnsLoadedRef.current);
     if (user?.id && location && !spawnsLoadedRef.current) {
       console.log('🔍 LOCATION: Conditions met, calling loadSpawnsForLocation...');
-      // Use location coords directly, not getCurrentActiveLocation() helper
       loadSpawnsForLocation(location, false);
     } else {
       console.log('🔍 LOCATION: loadSpawns conditions not met - skipping');
@@ -111,24 +92,23 @@ export default function MapScreen() {
   // Use a ref to track previous location to avoid unnecessary filtering
   const prevLocationRef = useRef<{ lat: number; lon: number } | null>(null);
   useEffect(() => {
-    const currentLoc = getCurrentActiveLocation();
-    if (!currentLoc || spawns.length === 0) return;
+    if (!location || spawns.length === 0) return;
     
     // Only re-filter if location changed significantly (more than 50m)
     const shouldRefilter = !prevLocationRef.current || 
       calculateDistance(
         prevLocationRef.current.lat,
         prevLocationRef.current.lon,
-        currentLoc.latitude,
-        currentLoc.longitude
+        location.latitude,
+        location.longitude
       ) > 50;
     
     if (shouldRefilter) {
       // Re-filter spawns to only show visible ones
       const visibleSpawns = spawns.filter(spawn => {
         const distance = calculateDistance(
-          currentLoc.latitude,
-          currentLoc.longitude,
+          location.latitude,
+          location.longitude,
           spawn.latitude,
           spawn.longitude
         );
@@ -141,22 +121,21 @@ export default function MapScreen() {
         console.log(`📍 Location changed: ${visibleSpawns.length} visible spawns (filtered from ${spawns.length})`);
       }
       
-      prevLocationRef.current = { lat: currentLoc.latitude, lon: currentLoc.longitude };
+      prevLocationRef.current = { lat: location.latitude, lon: location.longitude };
     }
-  }, [location?.latitude, location?.longitude, devLocation?.latitude, devLocation?.longitude]);
+  }, [location?.latitude, location?.longitude]);
 
   // Periodic spawn refill check (every 30 seconds)
   // Uses visibility-based logic: only counts visible spawns
   useEffect(() => {
-    const currentLoc = getCurrentActiveLocation();
-    if (!user?.id || !currentLoc) return;
+    if (!user?.id || !location) return;
 
     const interval = setInterval(async () => {
       // Filter to only visible spawns (within visibility radius)
       const visibleSpawns = spawns.filter(spawn => {
         const distance = calculateDistance(
-          currentLoc.latitude,
-          currentLoc.longitude,
+          location.latitude,
+          location.longitude,
           spawn.latitude,
           spawn.longitude
         );
@@ -168,8 +147,8 @@ export default function MapScreen() {
         console.log(`🔄 Periodic check: Low visible spawns detected (${visibleSpawns.length} visible, ${spawns.length} total), refilling...`);
         const newSpawns = await refillPersonalSpawns(
           user.id,
-          currentLoc.latitude,
-          currentLoc.longitude,
+          location.latitude,
+          location.longitude,
           visibleSpawns.length
         );
         
@@ -180,7 +159,7 @@ export default function MapScreen() {
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [user?.id, location, devLocation, spawns]);
+  }, [user?.id, location, spawns]);
 
   const initializeLocation = async () => {
     console.log('🔍 LOCATION: initializeLocation() function called');
@@ -245,96 +224,11 @@ export default function MapScreen() {
     });
   };
 
-  // Dev joystick handlers
-  const handleJoystickMove = (latDelta: number, lonDelta: number) => {
-    const currentLoc = getCurrentActiveLocation();
-    if (currentLoc) {
-      const newLocation = {
-        latitude: currentLoc.latitude + latDelta,
-        longitude: currentLoc.longitude + lonDelta,
-      };
-      
-      // Update ref immediately (no re-render, smooth animation)
-      devLocationRef.current = newLocation;
-      
-      // Update state (triggers re-render for React components)
-      setDevLocation(newLocation);
-
-      // Update map camera
-      if (mapRef.current) {
-        mapRef.current.animateToRegion({
-          ...newLocation,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 100);
-      }
-
-      // Spawn reload is handled by debounced useEffect (see below)
-    }
-  };
-
-  const handleJoystickToggle = () => {
-    // Before activating, check if userLocation exists
-    if (!joystickActive) {
-      if (!location) {
-        // Location not ready yet, don't activate
-        Alert.alert('Location Not Ready', 'Please wait for your location to be detected first.');
-        return;
-      }
-      // Activate joystick: verify location exists, set joystickActive, initialize devLocation
-      const initialLocation = {
-        latitude: location.latitude,
-        longitude: location.longitude,
-      };
-      setJoystickActive(true);
-      // Initialize both ref and state to same value
-      devLocationRef.current = initialLocation;
-      setDevLocation(initialLocation);
-    } else {
-      // Deactivate: reset joystick, clear devLocation, reload spawns at real location
-      setJoystickActive(false);
-      // Clear both ref and state
-      devLocationRef.current = null;
-      setDevLocation(null);
-      if (location) {
-        // Reload spawns at real userLocation
-        loadSpawnsForLocation(location, true);
-        // Re-center map on real userLocation
-        if (mapRef.current) {
-          mapRef.current.animateToRegion({
-            latitude: location.latitude,
-            longitude: location.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }, 500);
-        }
-      }
-    }
-  };
-
-  // Debounced spawn reload after joystick movement stops
-  useEffect(() => {
-    // Only reload spawns when joystick is active and devLocation changes
-    if (!joystickActive || !devLocation) return;
-
-    // Set up debounce timer (500ms delay)
-    const timeoutId = setTimeout(() => {
-      // Reload spawns at the new location after movement stops
-      loadSpawnsForLocation(devLocation, true);
-    }, 500);
-
-    // Cleanup: clear timeout if devLocation changes again before delay completes
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [devLocation, joystickActive]);
-
   // Simple spawn loading - just get or generate spawns
   // Uses visibility-based system: filters spawns by visibility radius
   const loadSpawns = async () => {
-    const currentLoc = getCurrentActiveLocation();
-    if (!user?.id || !currentLoc) return;
-    await loadSpawnsForLocation(currentLoc);
+    if (!user?.id || !location) return;
+    await loadSpawnsForLocation(location);
   };
 
   const loadSpawnsForLocation = async (loc: { latitude: number; longitude: number }, forceReload = false) => {
@@ -553,11 +447,10 @@ export default function MapScreen() {
   };
 
   const centerOnUserLocation = async () => {
-    const currentLoc = getCurrentActiveLocation();
-    if (currentLoc && mapRef.current) {
+    if (location && mapRef.current) {
       mapRef.current.animateToRegion({
-        latitude: currentLoc.latitude,
-        longitude: currentLoc.longitude,
+        latitude: location.latitude,
+        longitude: location.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       }, 500);
@@ -575,14 +468,13 @@ export default function MapScreen() {
     setSpawns(remainingSpawns);
     setSelectedSpawn(null);
     
-    const currentLoc = getCurrentActiveLocation();
-    if (!user?.id || !currentLoc) return;
+    if (!user?.id || !location) return;
     
     // Filter to only visible spawns (within visibility radius)
     const visibleSpawns = remainingSpawns.filter(spawn => {
       const distance = calculateDistance(
-        currentLoc.latitude,
-        currentLoc.longitude,
+        location.latitude,
+        location.longitude,
         spawn.latitude,
         spawn.longitude
       );
@@ -595,8 +487,8 @@ export default function MapScreen() {
       try {
         const newSpawns = await refillPersonalSpawns(
           user.id,
-          currentLoc.latitude,
-          currentLoc.longitude,
+          location.latitude,
+          location.longitude,
           visibleSpawns.length
         );
         
@@ -604,8 +496,8 @@ export default function MapScreen() {
           // Filter new spawns to only include visible ones
           const visibleNewSpawns = newSpawns.filter(spawn => {
             const distance = calculateDistance(
-              currentLoc.latitude,
-              currentLoc.longitude,
+              location.latitude,
+              location.longitude,
               spawn.latitude,
               spawn.longitude
             );
@@ -618,7 +510,7 @@ export default function MapScreen() {
         console.error('Error refilling spawns:', error);
       }
     }
-  }, [spawns, user?.id, location, devLocation]);
+  }, [spawns, user?.id, location]);
 
   const handleCloseModal = useCallback(() => {
     setShowCollectionModal(false);
@@ -789,7 +681,7 @@ export default function MapScreen() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
-        showsUserLocation={true}
+        showsUserLocation={isDevMode()}
         showsMyLocationButton={false}
         mapType={Platform.OS === 'android' ? "standard" : "standard"}
         showsPointsOfInterest={false}
@@ -797,10 +689,10 @@ export default function MapScreen() {
         showsTraffic={false}
         showsCompass={false}
       >
-        {/* DEV: 1km visibility circle - only when joystick is active */}
-        {isDevMode() && joystickActive && getCurrentActiveLocation() && (
+        {/* DEV: 1km visibility circle - always visible in dev mode */}
+        {isDevMode() && location && (
           <Circle
-            center={getCurrentActiveLocation()!}
+            center={location}
             radius={1000} // 1km in meters
             fillColor="rgba(124, 58, 237, 0.1)"
             strokeColor="rgba(124, 58, 237, 0.4)"
@@ -808,24 +700,12 @@ export default function MapScreen() {
           />
         )}
 
-        {/* Custom user marker for dev mode override - only when joystick is active */}
-        {isDevMode() && joystickActive && devLocation && (
-          <Marker
-            coordinate={devLocation}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={styles.devMarker}>
-              <View style={styles.devMarkerInner} />
-            </View>
-          </Marker>
-        )}
-
         {/* Render personal spawn markers */}
         {spawns.map((spawn) => (
           <PersonalSpawnMarker
             key={spawn.id}
             spawn={spawn}
-            userLocation={getCurrentActiveLocation() || location}
+            userLocation={location}
             onPress={handleSpawnPress}
             showCollectionRadius={true}
           />
@@ -866,26 +746,17 @@ export default function MapScreen() {
         />
       </TouchableOpacity>
 
-      {/* DEV: Location Joystick */}
-      {isDevMode() && (
-        <LocationJoystick
-          onMove={handleJoystickMove}
-          onToggle={handleJoystickToggle}
-          isActive={joystickActive}
-        />
-      )}
-
       {/* Collection Modal */}
-      {user && (
-        <CollectionModal
-          visible={showCollectionModal}
-          spawn={selectedSpawn}
-          userLocation={getCurrentActiveLocation() || location}
-          userId={user.id}
-          onClose={handleCloseModal}
-          onCollected={handleCollected}
-        />
-      )}
+        {user && (
+          <CollectionModal
+            visible={showCollectionModal}
+            spawn={selectedSpawn}
+            userLocation={location}
+            userId={user.id}
+            onClose={handleCloseModal}
+            onCollected={handleCollected}
+          />
+        )}
     </View>
   );
 }
@@ -1113,26 +984,5 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
     textAlign: 'center',
-  },
-  devMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#7C3AED',
-    borderWidth: 4,
-    borderColor: '#fff',
-    shadowColor: '#7C3AED',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  devMarkerInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#7C3AED',
   },
 });
