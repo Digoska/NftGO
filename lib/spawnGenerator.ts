@@ -305,57 +305,86 @@ async function createNewSpawns(
   let sectorCounts = countSpawnsPerSector(visibleSpawns, userLat, userLon);
   
   console.log(`Current sector distribution: [${sectorCounts.join(', ')}]`);
+
+  const maxRetries = 100; // Maximum attempts per spawn to prevent infinite loops
   
-  for (let i = 0; i < spawnCount; i++) {
-    const nft = await selectRandomNFT();
-    if (!nft) continue;
+  for (let i = 0; i < spawnCount; ) {
+    let retryCount = 0;
+    let spawnPlaced = false;
     
-    // Select a balanced sector for this spawn
-    const selectedSector = selectBalancedSector(sectorCounts);
-    
-    // Generate random location within spawn radius in the selected sector
-    const location = generateRandomPoint(
-      userLat,
-      userLon,
-      SPAWN_RADIUS_METERS,
-      { sectorIndex: selectedSector, sectorSize: SECTOR_SIZE }
-    );
-    
-    // Calculate distance from player to validate spawn placement
-    const distanceFromPlayer = calculateDistance(
-      userLat,
-      userLon,
-      location.latitude,
-      location.longitude
-    );
-    
-    // Validate spawn distance based on generation type
-    if (isRefill) {
-      // Refill spawns: Must be in buffer zone (1-2km from player)
-      if (distanceFromPlayer < REFILL_MIN_DISTANCE_METERS || distanceFromPlayer > REFILL_MAX_DISTANCE_METERS) {
-        // Skip this spawn - it's not in the buffer zone
-        continue;
+    while (!spawnPlaced && retryCount < maxRetries) {
+      retryCount++;
+      
+      const nft = await selectRandomNFT();
+      if (!nft) {
+        // NFT selection failed, check if we've exhausted retries
+        if (retryCount >= maxRetries) {
+          console.warn(`Failed to select NFT for spawn ${i + 1} after ${maxRetries} attempts, skipping`);
+          i++; // Skip this spawn after too many retries
+          break;
+        }
+        continue; // Retry without incrementing i
       }
-    } else {
-      // Initial spawns: Must be at least MIN_SPAWN_DISTANCE_METERS from player
-      if (distanceFromPlayer < MIN_SPAWN_DISTANCE_METERS) {
-        // Skip this spawn - too close to player
-        continue;
+      
+      // Select a balanced sector for this spawn
+      const selectedSector = selectBalancedSector(sectorCounts);
+      
+      // Generate random location within spawn radius in the selected sector
+      const location = generateRandomPoint(
+        userLat,
+        userLon,
+        SPAWN_RADIUS_METERS,
+        { sectorIndex: selectedSector, sectorSize: SECTOR_SIZE }
+      );
+      
+      // Calculate distance from player to validate spawn placement
+      const distanceFromPlayer = calculateDistance(
+        userLat,
+        userLon,
+        location.latitude,
+        location.longitude
+      );
+      
+      // Validate spawn distance based on generation type
+      let validationPassed = false;
+      if (isRefill) {
+        // Refill spawns: Must be in buffer zone (1-2km from player)
+        validationPassed = distanceFromPlayer >= REFILL_MIN_DISTANCE_METERS && 
+                          distanceFromPlayer <= REFILL_MAX_DISTANCE_METERS;
+      } else {
+        // Initial spawns: Must be at least MIN_SPAWN_DISTANCE_METERS from player
+        validationPassed = distanceFromPlayer >= MIN_SPAWN_DISTANCE_METERS;
       }
+      
+      // If validation failed, check retry limit
+      if (!validationPassed) {
+        if (retryCount >= maxRetries) {
+          const zone = isRefill 
+            ? `buffer zone (${REFILL_MIN_DISTANCE_METERS}-${REFILL_MAX_DISTANCE_METERS}m)`
+            : `minimum distance (${MIN_SPAWN_DISTANCE_METERS}m)`;
+          console.warn(`Failed to place spawn ${i + 1} at ${zone} after ${maxRetries} attempts, skipping`);
+          i++; // Skip this spawn after too many retries
+          break;
+        }
+        continue; // Retry with new random location
+      }
+      
+      // Validation passed - create spawn
+      spawns.push({
+        user_id: userId,
+        nft_id: nft.id,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        spawn_radius: SPAWN_COLLECTION_RADIUS,
+        expires_at: expiresAt,
+        collected: false,
+      });
+      
+      // Increment sector count and loop counter only on successful spawn creation
+      sectorCounts[selectedSector]++;
+      i++; // Only increment when spawn successfully added
+      spawnPlaced = true;
     }
-    
-    spawns.push({
-      user_id: userId,
-      nft_id: nft.id,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      spawn_radius: SPAWN_COLLECTION_RADIUS,
-      expires_at: expiresAt,
-      collected: false,
-    });
-    
-    // Increment sector count for next iteration
-    sectorCounts[selectedSector]++;
   }
   
   if (spawns.length === 0) {
