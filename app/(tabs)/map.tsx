@@ -31,20 +31,6 @@ import * as Location from 'expo-location';
 // Check if we're in Expo Go (maps won't work)
 const isExpoGo = Constants.appOwnership === 'expo';
 
-// ============================================================================
-// BEFORE PRODUCTION DEPLOYMENT:
-// Set FORCE_DEV_MODE = false to disable dev tools in release builds
-// ============================================================================
-const FORCE_DEV_MODE = true; // Set to false before Play Store submission
-
-/**
- * Determines if dev mode should be enabled
- * @returns true if in development mode OR FORCE_DEV_MODE is enabled
- */
-const isDevMode = (): boolean => {
-  return __DEV__ || FORCE_DEV_MODE;
-};
-
 export default function MapScreen() {
   console.log('🔍 LOCATION: MapScreen component rendering');
   const { user } = useAuth();
@@ -52,7 +38,8 @@ export default function MapScreen() {
   const [location, setLocation] = useState<LocationType | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSpawns, setLoadingSpawns] = useState(false);
-  const [spawns, setSpawns] = useState<PersonalSpawn[]>([]);
+  const [spawns, setSpawns] = useState<PersonalSpawn[]>([]); // Visible spawns only (for display)
+  const [allActiveSpawns, setAllActiveSpawns] = useState<PersonalSpawn[]>([]); // All active spawns in 2km buffer (for smooth reveal)
   const [selectedSpawn, setSelectedSpawn] = useState<PersonalSpawn | null>(null);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   
@@ -88,24 +75,33 @@ export default function MapScreen() {
     }
   }, [user?.id, location]);
 
-  // Filter spawns by visibility when location changes significantly
-  // Use a ref to track previous location to avoid unnecessary filtering
+  // Reveal spawns as player moves (1km visibility radius)
+  // Spawns exist in 2km buffer zone, only shown when player within 1km
+  // Smooth discovery through movement - no artificial generation
   const prevLocationRef = useRef<{ lat: number; lon: number } | null>(null);
   useEffect(() => {
-    if (!location || spawns.length === 0) return;
+    if (!location || !user?.id) return;
     
-    // Only re-filter if location changed significantly (more than 50m)
-    const shouldRefilter = !prevLocationRef.current || 
+    // Only reload if location changed significantly (more than 200m)
+    // This ensures buffer zone spawns become visible as player explores
+    const shouldReload = !prevLocationRef.current || 
       calculateDistance(
         prevLocationRef.current.lat,
         prevLocationRef.current.lon,
         location.latitude,
         location.longitude
-      ) > 50;
+      ) > 200;
     
-    if (shouldRefilter) {
-      // Re-filter spawns to only show visible ones
-      const visibleSpawns = spawns.filter(spawn => {
+    if (shouldReload) {
+      // Reload spawns from database to get newly visible ones from buffer zone
+      // This reveals spawns that were previously outside visibility radius
+      // Pass forceReload=true to allow reloading even if spawns were already loaded
+      loadSpawnsForLocation(location, true);
+      prevLocationRef.current = { lat: location.latitude, lon: location.longitude };
+    } else if (allActiveSpawns.length > 0) {
+      // For smaller movements, re-filter from all active spawns (including buffer zone)
+      // This smoothly reveals buffer zone spawns as player moves closer
+      const visibleSpawns = allActiveSpawns.filter(spawn => {
         const distance = calculateDistance(
           location.latitude,
           location.longitude,
@@ -118,48 +114,11 @@ export default function MapScreen() {
       // Only update if the count changed (avoid unnecessary re-renders)
       if (visibleSpawns.length !== spawns.length) {
         setSpawns(visibleSpawns);
-        console.log(`📍 Location changed: ${visibleSpawns.length} visible spawns (filtered from ${spawns.length})`);
+        console.log(`📍 Location changed: ${visibleSpawns.length} visible spawns (filtered from ${allActiveSpawns.length} total)`);
       }
-      
-      prevLocationRef.current = { lat: location.latitude, lon: location.longitude };
     }
-  }, [location?.latitude, location?.longitude]);
+  }, [location?.latitude, location?.longitude, user?.id, spawns.length, allActiveSpawns.length]);
 
-  // Periodic spawn refill check (every 30 seconds)
-  // Uses visibility-based logic: only counts visible spawns
-  useEffect(() => {
-    if (!user?.id || !location) return;
-
-    const interval = setInterval(async () => {
-      // Filter to only visible spawns (within visibility radius)
-      const visibleSpawns = spawns.filter(spawn => {
-        const distance = calculateDistance(
-          location.latitude,
-          location.longitude,
-          spawn.latitude,
-          spawn.longitude
-        );
-        return distance <= VISIBILITY_RADIUS_METERS;
-      });
-      
-      // Only refill if visible spawns are low
-      if (visibleSpawns.length < 7) {
-        console.log(`🔄 Periodic check: Low visible spawns detected (${visibleSpawns.length} visible, ${spawns.length} total), refilling...`);
-        const newSpawns = await refillPersonalSpawns(
-          user.id,
-          location.latitude,
-          location.longitude,
-          visibleSpawns.length
-        );
-        
-        if (newSpawns.length > 0) {
-          setSpawns(prev => [...prev, ...newSpawns]);
-        }
-      }
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [user?.id, location, spawns]);
 
   const initializeLocation = async () => {
     console.log('🔍 LOCATION: initializeLocation() function called');
@@ -245,15 +204,24 @@ export default function MapScreen() {
       console.log('📍 Loading spawns for user...');
       
       // Use the new visibility-based generation system
+      // This generates spawns if needed and returns visible spawns
       const result = await generatePersonalSpawns(
         user.id,
         loc.latitude,
         loc.longitude
       );
       
-      if (!result.error && result.spawns.length > 0) {
+      // Load ALL active spawns (including buffer zone) so they can be revealed as player moves
+      // This ensures smooth discovery - spawns in buffer zone are in state, just filtered for display
+      const allActiveSpawns = await getActivePersonalSpawns(user.id);
+      
+      if (!result.error) {
+        // Store all active spawns in state (for smooth reveal as player moves)
+        setAllActiveSpawns(allActiveSpawns);
+        
         // Filter spawns to only show visible ones (within visibility radius)
-        const visibleSpawns = result.spawns.filter(spawn => {
+        // Buffer zone spawns (1-2km) are in allActiveSpawns but hidden until player moves closer
+        const visibleSpawns = allActiveSpawns.filter(spawn => {
           const distance = calculateDistance(
             loc.latitude,
             loc.longitude,
@@ -263,8 +231,9 @@ export default function MapScreen() {
           return distance <= VISIBILITY_RADIUS_METERS;
         });
         
+        // Display only visible spawns
         setSpawns(visibleSpawns);
-        console.log(`✅ Loaded ${visibleSpawns.length} visible spawns (${result.spawns.length} total)`);
+        console.log(`✅ Loaded ${visibleSpawns.length} visible spawns (${allActiveSpawns.length} total active in 2km buffer)`);
         
         // Log rarity distribution
         const distribution = visibleSpawns.reduce((acc, s) => {
@@ -275,6 +244,7 @@ export default function MapScreen() {
         console.log('Rarity distribution:', distribution);
       } else {
         setSpawns([]);
+        setAllActiveSpawns([]);
       }
     } catch (error) {
       console.error('Error loading spawns:', error);
@@ -463,54 +433,16 @@ export default function MapScreen() {
   }, []);
 
   const handleCollected = useCallback(async (collectedSpawn: PersonalSpawn) => {
-    // Remove collected spawn from list
+    // Remove collected spawn from both visible and all active lists
     const remainingSpawns = spawns.filter((s) => s.id !== collectedSpawn.id);
+    const remainingAllSpawns = allActiveSpawns.filter((s) => s.id !== collectedSpawn.id);
     setSpawns(remainingSpawns);
+    setAllActiveSpawns(remainingAllSpawns);
     setSelectedSpawn(null);
     
-    if (!user?.id || !location) return;
-    
-    // Filter to only visible spawns (within visibility radius)
-    const visibleSpawns = remainingSpawns.filter(spawn => {
-      const distance = calculateDistance(
-        location.latitude,
-        location.longitude,
-        spawn.latitude,
-        spawn.longitude
-      );
-      return distance <= VISIBILITY_RADIUS_METERS;
-    });
-    
-    // Trigger refill if low on visible spawns
-    if (visibleSpawns.length < 7) {
-      console.log(`🔄 Collection triggered refill... (${visibleSpawns.length} visible, ${remainingSpawns.length} total)`);
-      try {
-        const newSpawns = await refillPersonalSpawns(
-          user.id,
-          location.latitude,
-          location.longitude,
-          visibleSpawns.length
-        );
-        
-        if (newSpawns.length > 0) {
-          // Filter new spawns to only include visible ones
-          const visibleNewSpawns = newSpawns.filter(spawn => {
-            const distance = calculateDistance(
-              location.latitude,
-              location.longitude,
-              spawn.latitude,
-              spawn.longitude
-            );
-            return distance <= VISIBILITY_RADIUS_METERS;
-          });
-          
-          setSpawns(prev => [...prev, ...visibleNewSpawns]);
-        }
-      } catch (error) {
-        console.error('Error refilling spawns:', error);
-      }
-    }
-  }, [spawns, user?.id, location]);
+    // No instant refills - player must explore to discover more spawns from buffer zone
+    // The buffer zone system automatically maintains 15-20 spawns, revealed through movement
+  }, [spawns, allActiveSpawns]);
 
   const handleCloseModal = useCallback(() => {
     setShowCollectionModal(false);
@@ -681,7 +613,7 @@ export default function MapScreen() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
-        showsUserLocation={isDevMode()}
+        showsUserLocation={true}
         showsMyLocationButton={false}
         mapType={Platform.OS === 'android' ? "standard" : "standard"}
         showsPointsOfInterest={false}
@@ -689,8 +621,8 @@ export default function MapScreen() {
         showsTraffic={false}
         showsCompass={false}
       >
-        {/* DEV: 1km visibility circle - always visible in dev mode */}
-        {isDevMode() && location && (
+        {/* 1km visibility circle - always visible */}
+        {location && (
           <Circle
             center={location}
             radius={1000} // 1km in meters

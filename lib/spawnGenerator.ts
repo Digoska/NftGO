@@ -5,7 +5,7 @@ import { PersonalSpawn, NFT } from '../types';
 // Configuration constants
 const SPAWN_COUNT_MIN = 5;
 const SPAWN_COUNT_MAX = 10;
-const SPAWN_RADIUS_METERS = 1000; // Generation radius: 1000m
+const SPAWN_RADIUS_METERS = 2000; // Generation radius: 2000m (2km buffer zone)
 const SPAWN_COLLECTION_RADIUS = 50;
 const SPAWN_EXPIRATION_HOURS = 1; // 1 hour expiration
 const DUPLICATE_CHECK_RADIUS = 100; // Don't regenerate if user is within 100m of last spawn location
@@ -13,6 +13,11 @@ const DUPLICATE_CHECK_RADIUS = 100; // Don't regenerate if user is within 100m o
 // Visibility and cleanup radii for new spawn system
 const VISIBILITY_RADIUS_METERS = 1000; // Show/hide spawns based on distance
 const CLEANUP_RADIUS_METERS = 2000; // Delete spawns beyond this distance
+
+// Distance constraints for smart two-zone spawn system
+const MIN_SPAWN_DISTANCE_METERS = 200; // Minimum distance from player for initial spawns (prevents spawns on top of player)
+const REFILL_MIN_DISTANCE_METERS = 1000; // Minimum distance for refill spawns (outside visibility - in buffer zone)
+const REFILL_MAX_DISTANCE_METERS = 2000; // Maximum distance for refill spawns (within buffer zone)
 
 // Sector-based balancing constants
 const SECTOR_COUNT = 8; // Divide area into 8 compass directions
@@ -273,12 +278,14 @@ async function hasActiveSpawnsNearLocation(
 /**
  * Generates new personal spawns for a user at their current location
  * Uses sector-based balancing to prevent clustering
+ * @param isRefill - If true, spawns only in buffer zone (1-2km). If false, spawns across full 2km circle.
  */
 async function createNewSpawns(
   userId: string,
   userLat: number,
   userLon: number,
-  count?: number
+  count?: number,
+  isRefill: boolean = false
 ): Promise<PersonalSpawn[]> {
   const spawnCount = count || Math.floor(Math.random() * (SPAWN_COUNT_MAX - SPAWN_COUNT_MIN + 1)) + SPAWN_COUNT_MIN;
   const spawns: Partial<PersonalSpawn>[] = [];
@@ -313,6 +320,29 @@ async function createNewSpawns(
       SPAWN_RADIUS_METERS,
       { sectorIndex: selectedSector, sectorSize: SECTOR_SIZE }
     );
+    
+    // Calculate distance from player to validate spawn placement
+    const distanceFromPlayer = calculateDistance(
+      userLat,
+      userLon,
+      location.latitude,
+      location.longitude
+    );
+    
+    // Validate spawn distance based on generation type
+    if (isRefill) {
+      // Refill spawns: Must be in buffer zone (1-2km from player)
+      if (distanceFromPlayer < REFILL_MIN_DISTANCE_METERS || distanceFromPlayer > REFILL_MAX_DISTANCE_METERS) {
+        // Skip this spawn - it's not in the buffer zone
+        continue;
+      }
+    } else {
+      // Initial spawns: Must be at least MIN_SPAWN_DISTANCE_METERS from player
+      if (distanceFromPlayer < MIN_SPAWN_DISTANCE_METERS) {
+        // Skip this spawn - too close to player
+        continue;
+      }
+    }
     
     spawns.push({
       user_id: userId,
@@ -353,7 +383,8 @@ async function createNewSpawns(
 
 /**
  * Refills personal spawns to ensure user has enough active spawns
- * Target: 7-10 spawns
+ * Target: 15-20 spawns
+ * Generates spawns ONLY in buffer zone (1-2km from player) to encourage exploration
  */
 export async function refillPersonalSpawns(
   userId: string,
@@ -361,8 +392,8 @@ export async function refillPersonalSpawns(
   userLon: number,
   currentCount: number
 ): Promise<PersonalSpawn[]> {
-  const targetMin = 7;
-  const targetMax = 10;
+  const targetMin = 15;
+  const targetMax = 20;
   
   // If we have enough spawns, don't generate more
   if (currentCount >= targetMin) {
@@ -379,20 +410,21 @@ export async function refillPersonalSpawns(
   
   if (countToGenerate <= 0) return [];
   
-  console.log(`Refilling spawns: Current ${currentCount}, Target ${targetMin}-${targetMax}, Generating ${countToGenerate}`);
+  console.log(`Refilling spawns: Current ${currentCount}, Target ${targetMin}-${targetMax}, Generating ${countToGenerate} in buffer zone (1-2km)`);
   
-  return createNewSpawns(userId, userLat, userLon, countToGenerate);
+  // Pass isRefill=true to generate spawns only in buffer zone
+  return createNewSpawns(userId, userLat, userLon, countToGenerate, true);
 }
 
 /**
  * Main function to generate personal spawns for a user
  * 
- * Visibility-based spawning system:
+ * Smart two-zone spawn discovery system:
  * - Cleans up distant spawns (beyond 2000m) first
  * - Gets all visible spawns (within 1000m)
- * - If visible spawns >= 7, returns existing visible spawns
- * - If visible spawns < 7, generates new spawns to reach target (7-10 total)
- * - Spawns outside 1000m are ignored but remain in database
+ * - Cold start (0 visible spawns): Generates 15-20 spawns across full 2km circle (minimum 200m from player)
+ * - Refill (visible spawns < 15): Generates new spawns in buffer zone only (1-2km from player)
+ * - Spawns outside 1000m are hidden but remain in database, revealed as player moves
  */
 export async function generatePersonalSpawns(
   userId: string,
@@ -408,30 +440,56 @@ export async function generatePersonalSpawns(
     
     console.log(`Found ${visibleSpawns.length} visible spawns (within ${VISIBILITY_RADIUS_METERS}m)`);
     
-    // Target: 7-10 spawns visible
-    const targetMin = 7;
-    const targetMax = 10;
+    // Target: 15-20 total active spawns in system (not just visible)
+    const targetMin = 15;
+    const targetMax = 20;
     
-    // If we have enough visible spawns, return them
-    if (visibleSpawns.length >= targetMin) {
-      console.log(`User has ${visibleSpawns.length} visible spawns (target: ${targetMin}-${targetMax}), returning existing`);
+    // Check total active spawns (not just visible) to determine if we need refill
+    const allActiveSpawns = await getActivePersonalSpawns(userId);
+    const totalActiveCount = allActiveSpawns.length;
+    
+    console.log(`Total active spawns: ${totalActiveCount} (visible: ${visibleSpawns.length})`);
+    
+    // Cold start detection: No visible spawns indicates new user or all expired
+    const isColdStart = visibleSpawns.length === 0;
+    
+    // If we have enough total spawns, return visible ones
+    if (totalActiveCount >= targetMin) {
+      console.log(`User has ${totalActiveCount} total active spawns (target: ${targetMin}-${targetMax}), returning ${visibleSpawns.length} visible`);
       return { spawns: visibleSpawns, isNew: false };
     }
     
     // Calculate how many new spawns to generate
-    const neededMin = targetMin - visibleSpawns.length;
-    const neededMax = targetMax - visibleSpawns.length;
+    const neededMin = targetMin - totalActiveCount;
+    const neededMax = targetMax - totalActiveCount;
     const countToGenerate = Math.floor(Math.random() * (neededMax - neededMin + 1)) + neededMin;
     
-    console.log(`Generating ${countToGenerate} new spawns to reach target (current: ${visibleSpawns.length}, target: ${targetMin}-${targetMax})`);
+    if (isColdStart) {
+      console.log(`Cold start detected: Generating ${countToGenerate} new spawns across full 2km circle (minimum 200m from player)`);
+    } else {
+      console.log(`Refill needed: Generating ${countToGenerate} new spawns in buffer zone (1-2km from player)`);
+    }
     
-    // Generate new spawns
-    const newSpawns = await createNewSpawns(userId, userLat, userLon, countToGenerate);
+    // Generate new spawns: isRefill=false for cold start (full 2km), isRefill=true for refill (buffer zone only)
+    const newSpawns = await createNewSpawns(userId, userLat, userLon, countToGenerate, !isColdStart);
     
-    // Combine visible spawns with new spawns
-    const allSpawns = [...visibleSpawns, ...newSpawns];
+    // Filter new spawns to only include visible ones for return
+    const visibleNewSpawns = newSpawns.filter(spawn => {
+      const distance = calculateDistance(
+        userLat,
+        userLon,
+        spawn.latitude,
+        spawn.longitude
+      );
+      return distance <= VISIBILITY_RADIUS_METERS;
+    });
     
-    return { spawns: allSpawns, isNew: newSpawns.length > 0 };
+    // Combine visible spawns with new visible spawns
+    const allVisibleSpawns = [...visibleSpawns, ...visibleNewSpawns];
+    
+    console.log(`Generated ${newSpawns.length} total spawns (${visibleNewSpawns.length} visible, ${newSpawns.length - visibleNewSpawns.length} in buffer zone)`);
+    
+    return { spawns: allVisibleSpawns, isNew: newSpawns.length > 0 };
     
   } catch (error) {
     console.error('Error in generatePersonalSpawns:', error);
@@ -641,6 +699,9 @@ export const SPAWN_CONFIG = {
   DUPLICATE_CHECK_RADIUS,
   VISIBILITY_RADIUS_METERS,
   CLEANUP_RADIUS_METERS,
+  MIN_SPAWN_DISTANCE_METERS,
+  REFILL_MIN_DISTANCE_METERS,
+  REFILL_MAX_DISTANCE_METERS,
   RARITY_WEIGHTS,
 };
 
