@@ -15,3 +15,6 @@ local.properties
 # Bundle artifacts
 *.jsbundle
 
+android_logs.txt
+android_startup_logs.txt
+final_debug_logs.txt
