@@ -12,12 +12,11 @@ import Constants from 'expo-constants';
 import MapView, { Marker, Circle } from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentLocation as fetchLocationFromDevice, calculateDistance, locationValidator } from '../../lib/location';
-import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, cleanupExpiredSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
+import { getSpawnsWithAutoGeneration, getActivePersonalSpawns, cleanupExpiredSpawns, forceRefreshSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
 
 // Import visibility radius constant
 const VISIBILITY_RADIUS_METERS = SPAWN_CONFIG.VISIBILITY_RADIUS_METERS || 1000;
 import { getTimeRemaining } from '../../lib/collectNFT';
-import { supabase } from '../../lib/supabase';
 import { Location as LocationType, PersonalSpawn } from '../../types';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
@@ -255,10 +254,9 @@ export default function MapScreen() {
     try {
       console.log('📍 Loading spawns for user...');
       
-      // Use the new visibility-based generation system
-      // This generates spawns if needed and returns visible spawns
-      const result = await generatePersonalSpawns(
-        user.id,
+      // Use secure RPC-based spawn system with automatic generation
+      // This enforces rate limiting and handles generation securely
+      const result = await getSpawnsWithAutoGeneration(
         loc.latitude,
         loc.longitude
       );
@@ -308,6 +306,7 @@ export default function MapScreen() {
   };
 
   // Force refresh - ONLY when user taps the button
+  // SECURITY: Uses secure forceRefreshSpawns() function (dev mode only)
   const handleForceRefresh = async () => {
     if (!user?.id || !location) {
       Alert.alert('Error', 'Location not available. Please try again.');
@@ -318,151 +317,43 @@ export default function MapScreen() {
     try {
       console.log('🔄 Force refreshing spawns...');
       
-      // 1. Fetch IDs of uncollected spawns to delete
-      const { data: spawnsToDelete, error: fetchError } = await supabase
-        .from('personal_spawns')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('collected', false);
+      // Use secure forceRefreshSpawns() function (dev mode only, uses spawn_generator role)
+      const result = await forceRefreshSpawns(user.id, location.latitude, location.longitude);
       
-      if (fetchError) {
-        console.error('❌ Error fetching spawns to delete:', fetchError);
-        Alert.alert('Error', 'Failed to identify old spawns');
+      if (result.error) {
+        Alert.alert('Error', result.error);
         return;
       }
       
-      const idsToDelete = spawnsToDelete?.map(s => s.id) || [];
-      console.log(`📊 Found ${idsToDelete.length} spawns to delete`);
+      // Filter to visible spawns for display
+      const visibleSpawns = result.spawns.filter(spawn => {
+        const distance = calculateDistance(
+          location.latitude,
+          location.longitude,
+          spawn.latitude,
+          spawn.longitude
+        );
+        return distance <= VISIBILITY_RADIUS_METERS;
+      });
       
-      if (idsToDelete.length > 0) {
-        // 2. Delete by ID (more reliable)
-        const { error: deleteError } = await supabase
-          .from('personal_spawns')
-          .delete()
-          .in('id', idsToDelete);
-        
-        if (deleteError) {
-          console.error('❌ Error deleting spawns:', deleteError);
-          Alert.alert('Error', 'Failed to delete old spawns');
-          return;
-        }
-        
-        console.log(`✅ Requested deletion of ${idsToDelete.length} spawns`);
-      } else {
-        console.log('✅ No old spawns to delete');
-      }
-      
-      // 3. Verify deletion completed
-      const { count: afterCount } = await supabase
-        .from('personal_spawns')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('collected', false);
-      
-      console.log(`🔍 Verification - Spawns remaining: ${afterCount}`);
-      
-      if (afterCount && afterCount > 0) {
-        console.error('❌ Deletion failed - spawns still exist!');
-        // Don't return here, try to generate anyway so user sees something new
-        // But warn about database pollution
-      }
-      
-      // 4. Generate fresh spawns (createNewSpawns directly, not generatePersonalSpawns which checks for existing)
-      const spawnCount = Math.floor(Math.random() * 6) + 5; // 5-10 spawns
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
-      
-      console.log(`🕐 Expiration time: ${expiresAt}`);
-      console.log(`🕐 Current time: ${new Date().toISOString()}`);
-      
-      // Fetch available NFTs
-      const { data: nfts, error: nftError } = await supabase
-        .from('nfts')
-        .select('*')
-        .in('rarity', ['common', 'rare', 'epic']);
-      
-      if (nftError || !nfts || nfts.length === 0) {
-        console.error('No NFTs available');
-        Alert.alert('Error', 'No NFTs available for spawning');
-        return;
-      }
-      
-      // Create spawn records
-      const spawnsToInsert = [];
-      for (let i = 0; i < spawnCount; i++) {
-        // Random rarity selection (40% common, 30% rare, 30% epic)
-        const rand = Math.random() * 100;
-        let targetRarity = 'common';
-        if (rand > 70) targetRarity = 'epic';
-        else if (rand > 40) targetRarity = 'rare';
-        
-        const rarityNfts = nfts.filter(n => n.rarity === targetRarity);
-        const selectedNft = rarityNfts.length > 0 
-          ? rarityNfts[Math.floor(Math.random() * rarityNfts.length)]
-          : nfts[Math.floor(Math.random() * nfts.length)];
-        
-        // Random location within 500m
-        const angle = Math.random() * 2 * Math.PI;
-        const distance = Math.random() * 500; // meters
-        const latOffset = (distance / 111320) * Math.cos(angle);
-        const lonOffset = (distance / (111320 * Math.cos(location.latitude * Math.PI / 180))) * Math.sin(angle);
-        
-        spawnsToInsert.push({
-          user_id: user.id,
-          nft_id: selectedNft.id,
-          latitude: location.latitude + latOffset,
-          longitude: location.longitude + lonOffset,
-          spawn_radius: 50,
-          expires_at: expiresAt,
-          collected: false,
-        });
-      }
-      
-      // Insert new spawns
-      const { data: newSpawns, error: insertError } = await supabase
-        .from('personal_spawns')
-        .insert(spawnsToInsert)
-        .select(`*, nft:nfts(*)`);
-      
-      if (insertError) {
-        console.error('❌ Error inserting spawns:', insertError);
-        Alert.alert('Error', 'Failed to create new spawns');
-        return;
-      }
-      
-      // 5. Verify final count
-      const { count: finalCount } = await supabase
-        .from('personal_spawns')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('collected', false);
-      
-      console.log(`✅ Force Refresh complete. Final spawn count: ${finalCount}`);
-      
-      // Log expiration verification
-      if (newSpawns && newSpawns.length > 0) {
-        const firstSpawn = newSpawns[0];
-        const expiresAtDate = new Date(firstSpawn.expires_at);
-        const now = new Date();
-        const diffMs = expiresAtDate.getTime() - now.getTime();
-        const diffMins = Math.round(diffMs / 60000);
-        console.log(`🕐 First spawn expires in ${diffMins} minutes`);
-      }
-      
-      setSpawns(newSpawns as PersonalSpawn[]);
+      // Update state
+      setSpawns(visibleSpawns);
+      setAllActiveSpawns(result.spawns);
       
       // Log rarity distribution
-      const distribution = (newSpawns || []).reduce((acc: Record<string, number>, s: any) => {
+      const distribution = visibleSpawns.reduce((acc: Record<string, number>, s) => {
         const rarity = s.nft?.rarity || 'unknown';
         acc[rarity] = (acc[rarity] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
       console.log('Rarity distribution:', distribution);
       
-      Alert.alert('Success', `Generated ${newSpawns?.length || 0} new spawns!\nExpires in ~60 minutes`);
+      Alert.alert('Success', `Generated ${result.spawns.length} new spawns!\nExpires in ~60 minutes`);
       
     } catch (error) {
       console.error('Error force refreshing:', error);
-      Alert.alert('Error', 'Failed to refresh spawns. Please try again.');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to refresh spawns';
+      Alert.alert('Error', errorMsg);
     } finally {
       setLoadingSpawns(false);
     }

@@ -2,6 +2,216 @@ import { supabase } from './supabase';
 import { generateRandomPoint, calculateDistance, isWithinRadius, calculateBearing } from './location';
 import { PersonalSpawn, NFT } from '../types';
 
+// ============================================================================
+// SECURE CLIENT WRAPPER - ONLY FUNCTION CLIENT SHOULD CALL
+// ============================================================================
+
+/**
+ * SECURE: Main function for clients to get spawns with automatic generation
+ * 
+ * This is the ONLY function clients should call to get spawns.
+ * It enforces rate limiting via RPC and handles generation securely.
+ * 
+ * Flow:
+ * 1. Calls RPC to get existing spawns (with rate limit check)
+ * 2. Checks if generation needed (< 15 total spawns)
+ * 3. If needed, triggers secure internal generation
+ * 4. Returns all visible spawns
+ * 
+ * @param userLat - User's current latitude
+ * @param userLon - User's current longitude
+ * @returns Array of visible spawns for the authenticated user
+ */
+export async function getSpawnsWithAutoGeneration(
+  userLat: number,
+  userLon: number
+): Promise<{ spawns: PersonalSpawn[]; isNew: boolean; error?: string }> {
+  try {
+    // Get user ID from session (required for RPC)
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      console.error('🔒 SECURITY: User not authenticated');
+      return {
+        spawns: [],
+        isNew: false,
+        error: 'Authentication required'
+      };
+    }
+    
+    const userId = user.id;
+    
+    // Step 1: Call RPC to get existing spawns (with rate limit check)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_user_spawns_rpc', {
+      p_user_lat: userLat,
+      p_user_lon: userLon
+    });
+    
+    if (rpcError) {
+      console.error('🔒 SECURITY: RPC error:', rpcError);
+      return {
+        spawns: [],
+        isNew: false,
+        error: rpcError.message || 'Failed to fetch spawns'
+      };
+    }
+    
+    // RPC returns visible spawns and rate limit status
+    const visibleSpawns: PersonalSpawn[] = (rpcData?.spawns || []).map((s: any) => ({
+      ...s,
+      nft: s.nft || s.nfts // Handle both naming conventions
+    })) as PersonalSpawn[];
+    
+    const isRateLimited = rpcData?.rate_limited === true;
+    const rateLimitReason = rpcData?.rate_limit_reason || '';
+    
+    if (isRateLimited) {
+      console.log(`🚫 Rate limited: ${rateLimitReason}`);
+      // Return existing spawns even if rate limited
+      return {
+        spawns: visibleSpawns,
+        isNew: false,
+        error: rateLimitReason
+      };
+    }
+    
+    // Step 2: Check total spawn count (visible + hidden in buffer zone)
+    const allActiveSpawns = await getActivePersonalSpawns(userId);
+    const totalActiveCount = allActiveSpawns.length;
+    
+    console.log(`📍 Spawn check: ${visibleSpawns.length} visible, ${totalActiveCount} total active`);
+    
+    // Step 3: If < 15 spawns, trigger secure generation
+    const TARGET_MIN = 15;
+    if (totalActiveCount < TARGET_MIN) {
+      console.log(`🔄 Generation needed: ${totalActiveCount} < ${TARGET_MIN}, triggering secure generation...`);
+      
+      const generationResult = await generatePersonalSpawnsSecure(
+        userId,
+        userLat,
+        userLon
+      );
+      
+      if (generationResult.error) {
+        console.error('🔒 SECURITY: Generation failed:', generationResult.error);
+        // Return existing spawns even if generation failed
+        return {
+          spawns: visibleSpawns,
+          isNew: false,
+          error: generationResult.error
+        };
+      }
+      
+      // Reload spawns after generation
+      const updatedSpawns = await getVisibleSpawns(userId, userLat, userLon);
+      return {
+        spawns: updatedSpawns,
+        isNew: generationResult.isNew
+      };
+    }
+    
+    // Step 4: Return existing visible spawns
+    return {
+      spawns: visibleSpawns,
+      isNew: false
+    };
+    
+  } catch (error) {
+    console.error('🔒 SECURITY: Error in getSpawnsWithAutoGeneration:', error);
+    return {
+      spawns: [],
+      isNew: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
+ * SECURE INTERNAL: Generates spawns with spawn_generator role activation
+ * 
+ * This function wraps the generation logic and activates the spawn_generator
+ * role to bypass RLS during authorized generation.
+ * 
+ * ⚠️ INTERNAL USE ONLY - Do not call directly from client
+ * 
+ * @param userId - Authenticated user ID
+ * @param userLat - User's current latitude
+ * @param userLon - User's current longitude
+ * @returns Generation result with spawns
+ */
+async function generatePersonalSpawnsSecure(
+  userId: string,
+  userLat: number,
+  userLon: number
+): Promise<{ spawns: PersonalSpawn[]; isNew: boolean; error?: string }> {
+  const startTime = Date.now();
+  const timestamp = new Date().toISOString();
+  
+  // Security audit logging
+  console.log(`🔒 SECURITY AUDIT: Generation started`, {
+    userId,
+    location: { lat: userLat, lon: userLon },
+    timestamp
+  });
+  
+  try {
+    // Step 1: Activate spawn_generator role (bypasses RLS)
+    const { error: authError } = await supabase.rpc('authorize_spawn_generation');
+    
+    if (authError) {
+      console.error('🔒 SECURITY: Failed to activate spawn_generator role:', authError);
+      return {
+        spawns: [],
+        isNew: false,
+        error: 'Authorization failed'
+      };
+    }
+    
+    console.log('🔒 SECURITY: spawn_generator role activated');
+    
+    // Step 2: Call existing generation logic (with all sector balancing)
+    const result = await generatePersonalSpawnsInternal(userId, userLat, userLon);
+    
+    // Step 3: Deactivate spawn_generator role
+    const { error: revokeError } = await supabase.rpc('revoke_spawn_generation');
+    
+    if (revokeError) {
+      console.error('🔒 SECURITY WARNING: Failed to revoke spawn_generator role:', revokeError);
+      // Continue anyway - role will expire
+    } else {
+      console.log('🔒 SECURITY: spawn_generator role revoked');
+    }
+    
+    // Security audit logging
+    const duration = Date.now() - startTime;
+    console.log(`🔒 SECURITY AUDIT: Generation completed`, {
+      userId,
+      spawnsGenerated: result.spawns.length,
+      isNew: result.isNew,
+      duration: `${duration}ms`,
+      timestamp: new Date().toISOString()
+    });
+    
+    return result;
+    
+  } catch (error) {
+    // Always revoke role on error
+    await supabase.rpc('revoke_spawn_generation').catch(() => {});
+    
+    console.error('🔒 SECURITY AUDIT: Generation error', {
+      userId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+    
+    return {
+      spawns: [],
+      isNew: false,
+      error: error instanceof Error ? error.message : 'Generation failed'
+    };
+  }
+}
+
 // Configuration constants
 const SPAWN_COUNT_MIN = 5;
 const SPAWN_COUNT_MAX = 10;
@@ -492,7 +702,7 @@ async function checkRateLimit(userId: string): Promise<{
 }
 
 /**
- * Main function to generate personal spawns for a user
+ * INTERNAL: Main function to generate personal spawns for a user
  * 
  * Smart two-zone spawn discovery system:
  * - Cleans up distant spawns (beyond 2000m) first
@@ -500,8 +710,10 @@ async function checkRateLimit(userId: string): Promise<{
  * - Cold start (0 visible spawns): Generates 15-20 spawns across full 2km circle (minimum 200m from player)
  * - Refill (visible spawns < 15): Generates new spawns in buffer zone only (1-2km from player)
  * - Spawns outside 1000m are hidden but remain in database, revealed as player moves
+ * 
+ * ⚠️ INTERNAL USE ONLY - Called by generatePersonalSpawnsSecure()
  */
-export async function generatePersonalSpawns(
+async function generatePersonalSpawnsInternal(
   userId: string,
   userLat: number,
   userLon: number
@@ -587,6 +799,45 @@ export async function generatePersonalSpawns(
       error: error instanceof Error ? error.message : 'Unknown error generating spawns'
     };
   }
+}
+
+/**
+ * @deprecated SECURITY WARNING: Do not call this function directly from client!
+ * 
+ * This function is deprecated and will throw an error if called directly.
+ * Use getSpawnsWithAutoGeneration() instead, which enforces rate limiting
+ * and proper security checks via RPC.
+ * 
+ * ⚠️ This function bypasses rate limiting and RLS checks when called directly.
+ * It is kept only for backward compatibility and internal use.
+ * 
+ * @throws Error if called directly from client (runtime protection)
+ */
+export async function generatePersonalSpawns(
+  userId: string,
+  userLat: number,
+  userLon: number
+): Promise<{ spawns: PersonalSpawn[]; isNew: boolean; error?: string }> {
+  // Runtime protection: Detect if called from client
+  // In production, this should always throw
+  const isDirectCall = true; // Assume direct call unless proven otherwise
+  
+  if (isDirectCall) {
+    const errorMsg = 'SECURITY: generatePersonalSpawns() is deprecated. Use getSpawnsWithAutoGeneration() instead.';
+    console.error('🔒', errorMsg);
+    console.error('🔒 Stack trace:', new Error().stack);
+    
+    // In production, throw error. In dev, warn but allow (for testing)
+    if (!__DEV__) {
+      throw new Error(errorMsg);
+    } else {
+      console.warn('⚠️ DEV MODE: Allowing deprecated function call. This will fail in production.');
+    }
+  }
+  
+  // If we get here (dev mode only), call internal function
+  // Note: This won't have spawn_generator role, so RLS will block inserts
+  return generatePersonalSpawnsInternal(userId, userLat, userLon);
 }
 
 /**
@@ -731,17 +982,32 @@ export async function getSpawnById(spawnId: string): Promise<PersonalSpawn | nul
 }
 
 /**
- * Force deletes ALL personal spawns for a user and regenerates new ones
- * Used by refresh button for testing
+ * ⚠️ DANGEROUS: Force deletes ALL personal spawns for a user and regenerates new ones
+ * 
+ * SECURITY WARNING:
+ * - This function bypasses rate limiting
+ * - This function bypasses RLS via spawn_generator role
+ * - ONLY WORKS IN DEV MODE
+ * 
+ * Used by refresh button for testing ONLY.
+ * 
+ * @throws Error if called in production (non-dev mode)
  */
 export async function forceRefreshSpawns(
   userId: string,
   userLat: number,
   userLon: number
 ): Promise<{ spawns: PersonalSpawn[]; error?: string }> {
+  // SECURITY: Only allow in dev mode
+  if (!__DEV__) {
+    const errorMsg = 'SECURITY: forceRefreshSpawns() is only available in development mode';
+    console.error('🔒', errorMsg);
+    throw new Error(errorMsg);
+  }
+  
+  console.warn('⚠️ DEV MODE: Using dangerous forceRefreshSpawns() function');
+  
   try {
-    // NOTE: This is a dev testing function - no rate limiting needed
-    // Will be removed before production launch
     
     // 1. Delete ALL personal spawns for this user (both collected and uncollected)
     const { error: deleteError } = await supabase
@@ -756,24 +1022,44 @@ export async function forceRefreshSpawns(
     
     console.log('Deleted all personal spawns, generating new ones...');
     
-    // 2. Generate fresh spawns
-    const newSpawns = await createNewSpawns(userId, userLat, userLon);
-    
-    // 3. Log rarity distribution for debugging
-    const distribution = {
-      common: newSpawns.filter(s => s.nft?.rarity === 'common').length,
-      rare: newSpawns.filter(s => s.nft?.rarity === 'rare').length,
-      epic: newSpawns.filter(s => s.nft?.rarity === 'epic').length,
-      legendary: newSpawns.filter(s => s.nft?.rarity === 'legendary').length,
-    };
-    console.log('Rarity distribution:', distribution);
-    
-    // 4. Verify no legendary spawns
-    if (distribution.legendary > 0) {
-      console.error(`CRITICAL BUG: ${distribution.legendary} legendary spawns generated!`);
+    // 2. Activate spawn_generator role for authorized inserts
+    const { error: authError } = await supabase.rpc('authorize_spawn_generation');
+    if (authError) {
+      console.error('🔒 SECURITY: Failed to activate spawn_generator role:', authError);
+      return {
+        spawns: [],
+        error: 'Authorization failed'
+      };
     }
     
-    return { spawns: newSpawns };
+    try {
+      // 3. Generate fresh spawns (with role active, RLS bypassed)
+      const newSpawns = await createNewSpawns(userId, userLat, userLon);
+      
+      // 4. Deactivate spawn_generator role
+      await supabase.rpc('revoke_spawn_generation').catch(() => {});
+    
+      // 5. Log rarity distribution for debugging
+      const distribution = {
+        common: newSpawns.filter(s => s.nft?.rarity === 'common').length,
+        rare: newSpawns.filter(s => s.nft?.rarity === 'rare').length,
+        epic: newSpawns.filter(s => s.nft?.rarity === 'epic').length,
+        legendary: newSpawns.filter(s => s.nft?.rarity === 'legendary').length,
+      };
+      console.log('Rarity distribution:', distribution);
+      
+      // 6. Verify no legendary spawns
+      if (distribution.legendary > 0) {
+        console.error(`CRITICAL BUG: ${distribution.legendary} legendary spawns generated!`);
+      }
+      
+      return { spawns: newSpawns };
+      
+    } catch (genError) {
+      // Always revoke role on error
+      await supabase.rpc('revoke_spawn_generation').catch(() => {});
+      throw genError;
+    }
     
   } catch (error) {
     console.error('Error in forceRefreshSpawns:', error);
