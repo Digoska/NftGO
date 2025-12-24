@@ -290,10 +290,15 @@ async function createNewSpawns(
   const spawnCount = count || Math.floor(Math.random() * (SPAWN_COUNT_MAX - SPAWN_COUNT_MIN + 1)) + SPAWN_COUNT_MIN;
   const spawns: Partial<PersonalSpawn>[] = [];
   
-  // Calculate expiration: NOW + 1 hour
+  // Calculate expiration in UTC to prevent timezone issues
   const now = new Date();
   const expiresAtDate = new Date(now.getTime() + SPAWN_EXPIRATION_HOURS * 60 * 60 * 1000);
-  const expiresAt = expiresAtDate.toISOString();
+  const expiresAt = expiresAtDate.toISOString(); // ISO format is always UTC with 'Z' suffix
+  
+  // Verify timezone format
+  if (!expiresAt.endsWith('Z')) {
+    console.error('⚠️ TIMEZONE ERROR: expires_at not in UTC format:', expiresAt);
+  }
   
   console.log(`Generating ${spawnCount} personal spawns for user ${userId}`);
   console.log(`🕐 Current time: ${now.toISOString()}`);
@@ -446,6 +451,47 @@ export async function refillPersonalSpawns(
 }
 
 /**
+ * Checks if user has exceeded spawn generation rate limits
+ * Rate limits:
+ * - 60 second cooldown between generations
+ * - Maximum 10 generations per hour
+ */
+async function checkRateLimit(userId: string): Promise<{
+  allowed: boolean;
+  reason?: string;
+  retryAfterSeconds?: number;
+}> {
+  try {
+    const { data, error } = await supabase.rpc('check_spawn_generation_rate_limit', {
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error('Rate limit check error:', error);
+      // On error, allow generation (fail open)
+      return { allowed: true };
+    }
+    
+    if (!data || !data.allowed) {
+      const retryAfter = data?.retry_after_seconds || 60;
+      const reason = data?.reason || 'Rate limit exceeded';
+      console.log(`🚫 Rate limit: ${reason}, retry in ${retryAfter}s`);
+      return {
+        allowed: false,
+        reason,
+        retryAfterSeconds: retryAfter
+      };
+    }
+    
+    return { allowed: true };
+  } catch (err) {
+    console.error('Rate limit check exception:', err);
+    // On error, allow generation (fail open)
+    return { allowed: true };
+  }
+}
+
+/**
  * Main function to generate personal spawns for a user
  * 
  * Smart two-zone spawn discovery system:
@@ -461,8 +507,21 @@ export async function generatePersonalSpawns(
   userLon: number
 ): Promise<{ spawns: PersonalSpawn[]; isNew: boolean; error?: string }> {
   try {
+    // Check rate limits before generating spawns
+    const rateLimitCheck = await checkRateLimit(userId);
+    if (!rateLimitCheck.allowed) {
+      return {
+        spawns: [],
+        isNew: false,
+        error: `Please wait ${rateLimitCheck.retryAfterSeconds}s before generating more spawns`
+      };
+    }
+    
     // Clean up distant spawns first (beyond cleanup radius)
     await cleanupDistantSpawns(userId, userLat, userLon);
+    
+    // Also cleanup expired spawns
+    await cleanupExpiredSpawns(userId);
     
     // Get all visible spawns (within visibility radius)
     const visibleSpawns = await getVisibleSpawns(userId, userLat, userLon);
@@ -554,30 +613,29 @@ export async function getActivePersonalSpawns(userId: string): Promise<PersonalS
 }
 
 /**
- * Removes expired spawns from the user's view (marks them or deletes)
- * Note: This is mainly for cleanup - the database query already filters by expires_at
+ * Removes expired spawns from the database
+ * Uses server-side function for atomic cleanup
  */
-export async function cleanupExpiredSpawns(userId: string): Promise<number> {
-  // Delete expired, uncollected spawns
-  const { data, error } = await supabase
-    .from('personal_spawns')
-    .delete()
-    .eq('user_id', userId)
-    .eq('collected', false)
-    .lt('expires_at', new Date().toISOString())
-    .select('id');
-  
-  if (error) {
-    console.error('Error cleaning up expired spawns:', error);
+export async function cleanupExpiredSpawns(userId?: string): Promise<number> {
+  try {
+    // Call server-side cleanup function
+    const { data, error } = await supabase.rpc('cleanup_expired_personal_spawns');
+    
+    if (error) {
+      console.error('Error cleaning up expired spawns:', error);
+      return 0;
+    }
+    
+    const count = data || 0;
+    if (count > 0) {
+      console.log(`🧹 Cleaned up ${count} expired spawns`);
+    }
+    
+    return count;
+  } catch (err) {
+    console.error('Exception cleaning up expired spawns:', err);
     return 0;
   }
-  
-  const count = data?.length || 0;
-  if (count > 0) {
-    console.log(`Cleaned up ${count} expired spawns for user ${userId}`);
-  }
-  
-  return count;
 }
 
 /**
@@ -607,8 +665,10 @@ async function cleanupDistantSpawns(
       return 0;
     }
     
-    // Find spawns beyond cleanup radius
+    // Find spawns beyond cleanup radius (with 100m buffer to prevent race conditions)
     const distantSpawnIds: string[] = [];
+    const CLEANUP_BUFFER_METERS = 100; // Safety buffer to prevent cleanup during collection
+    
     for (const spawn of data) {
       const distance = calculateDistance(
         userLat,
@@ -617,10 +677,13 @@ async function cleanupDistantSpawns(
         spawn.longitude
       );
       
-      if (distance > CLEANUP_RADIUS_METERS) {
+      // Only cleanup spawns well beyond the cleanup radius
+      if (distance > CLEANUP_RADIUS_METERS + CLEANUP_BUFFER_METERS) {
         distantSpawnIds.push(spawn.id);
       }
     }
+    
+    console.log(`🧹 Cleanup check: ${data.length} total spawns, ${distantSpawnIds.length} beyond ${CLEANUP_RADIUS_METERS + CLEANUP_BUFFER_METERS}m`);
     
     if (distantSpawnIds.length === 0) {
       return 0;
@@ -677,6 +740,15 @@ export async function forceRefreshSpawns(
   userLon: number
 ): Promise<{ spawns: PersonalSpawn[]; error?: string }> {
   try {
+    // Check rate limits before force refresh
+    const rateLimitCheck = await checkRateLimit(userId);
+    if (!rateLimitCheck.allowed) {
+      return {
+        spawns: [],
+        error: `Rate limit active. Please wait ${rateLimitCheck.retryAfterSeconds}s`
+      };
+    }
+    
     // 1. Delete ALL personal spawns for this user (both collected and uncollected)
     const { error: deleteError } = await supabase
       .from('personal_spawns')

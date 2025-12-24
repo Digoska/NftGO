@@ -12,7 +12,7 @@ import Constants from 'expo-constants';
 import MapView, { Marker, Circle } from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentLocation as fetchLocationFromDevice, calculateDistance, locationValidator } from '../../lib/location';
-import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
+import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, cleanupExpiredSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
 
 // Import visibility radius constant
 const VISIBILITY_RADIUS_METERS = SPAWN_CONFIG.VISIBILITY_RADIUS_METERS || 1000;
@@ -51,6 +51,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const spawnsLoadedRef = useRef(false);
+  const lastCleanupRef = useRef<number>(0);
 
   // Initialize location on mount
   useEffect(() => {
@@ -210,6 +211,16 @@ export default function MapScreen() {
         }
         if (tierStatus.cooldownProgress !== undefined && tierStatus.cooldownProgress < 1) {
           console.log(`⏳ Cooldown: ${Math.round(tierStatus.cooldownProgress * 12)}/12 (${Math.round(tierStatus.cooldownProgress * 100)}%)`);
+        }
+        
+        // Periodic cleanup every 5 minutes
+        const now = Date.now();
+        if (now - lastCleanupRef.current > 5 * 60 * 1000) {
+          console.log('🧹 Running periodic expired spawn cleanup...');
+          cleanupExpiredSpawns().catch(err => {
+            console.error('Periodic cleanup error:', err);
+          });
+          lastCleanupRef.current = now;
         }
         
         setLocation(locationData);

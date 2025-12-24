@@ -318,6 +318,7 @@ export function getTimeRemaining(expiresAtString: string): { text: string; isExp
   // This fixes the issue where local time interpretation causes premature expiration
   let expiresString = expiresAtString;
   if (expiresString && !expiresString.endsWith('Z') && !expiresString.includes('+')) {
+    console.warn('⚠️ TIMEZONE: expires_at missing UTC indicator, adding Z:', expiresAtString);
     expiresString += 'Z';
   }
   
