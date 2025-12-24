@@ -740,14 +740,8 @@ export async function forceRefreshSpawns(
   userLon: number
 ): Promise<{ spawns: PersonalSpawn[]; error?: string }> {
   try {
-    // Check rate limits before force refresh
-    const rateLimitCheck = await checkRateLimit(userId);
-    if (!rateLimitCheck.allowed) {
-      return {
-        spawns: [],
-        error: `Rate limit active. Please wait ${rateLimitCheck.retryAfterSeconds}s`
-      };
-    }
+    // NOTE: This is a dev testing function - no rate limiting needed
+    // Will be removed before production launch
     
     // 1. Delete ALL personal spawns for this user (both collected and uncollected)
     const { error: deleteError } = await supabase
