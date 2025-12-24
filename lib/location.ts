@@ -236,7 +236,7 @@ export interface LocationHistory {
 export class LocationValidator {
   private locationHistory: LocationHistory[] = [];
   private readonly MAX_HISTORY = 10;
-  private readonly MAX_SPEED_KMH = 120; // Max realistic speed (driving)
+  private readonly MAX_SPEED_KMH = 50; // Max realistic speed (city speed limit, walking/biking/slow driving)
   private readonly MIN_ACCURACY_METERS = 100; // GPS accuracy threshold
 
   /**
