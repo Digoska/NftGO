@@ -19,6 +19,7 @@ import { collectPersonalNFT, formatDistance, getDistanceToSpawn, getTimeRemainin
 import { SPAWN_CONFIG } from '../../lib/spawnGenerator';
 import { getRarityColor, getRarityIcon } from './PersonalSpawnMarker';
 import WebViewModel from '../nft/WebViewModel';
+import { locationValidator } from '../../lib/location';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -115,6 +116,34 @@ export default function CollectionModal({
   
   const handleCollect = async () => {
     if (!spawn || !isInRange) return;
+    
+    // Add current location to validator history
+    locationValidator.addLocation(
+      userLocation.latitude,
+      userLocation.longitude,
+      userLocation.accuracy
+    );
+    
+    // Validate movement before collection
+    const movementValidation = locationValidator.isValidMovement(
+      userLocation.latitude,
+      userLocation.longitude
+    );
+    
+    if (!movementValidation.valid) {
+      console.log('🚨 Movement validation failed:', movementValidation.reason);
+      setState('error');
+      setErrorMessage(movementValidation.reason || 'Movement too fast, possible GPS spoofing detected');
+      return;
+    }
+    
+    // Check for teleportation
+    if (locationValidator.detectTeleport(userLocation.latitude, userLocation.longitude)) {
+      console.log('🚨 Teleportation detected');
+      setState('error');
+      setErrorMessage('Unrealistic movement detected. Please try again.');
+      return;
+    }
     
     setState('collecting');
     

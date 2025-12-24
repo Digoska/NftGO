@@ -219,3 +219,177 @@ export function generateRandomPoint(
   };
 }
 
+/**
+ * Location history entry for movement validation
+ */
+export interface LocationHistory {
+  latitude: number;
+  longitude: number;
+  timestamp: number;
+  accuracy?: number;
+}
+
+/**
+ * LocationValidator class to detect GPS spoofing and unrealistic movement
+ * Tracks user movement history and validates if new locations are realistic
+ */
+export class LocationValidator {
+  private locationHistory: LocationHistory[] = [];
+  private readonly MAX_HISTORY = 10;
+  private readonly MAX_SPEED_KMH = 120; // Max realistic speed (driving)
+  private readonly MIN_ACCURACY_METERS = 100; // GPS accuracy threshold
+
+  /**
+   * Add location to history for movement tracking
+   */
+  addLocation(lat: number, lon: number, accuracy?: number): void {
+    const now = Date.now();
+    
+    // Add to history
+    this.locationHistory.push({
+      latitude: lat,
+      longitude: lon,
+      timestamp: now,
+      accuracy,
+    });
+    
+    // Keep only last MAX_HISTORY locations
+    if (this.locationHistory.length > this.MAX_HISTORY) {
+      this.locationHistory.shift();
+    }
+    
+    console.log(`📍 LocationValidator: Added location (${lat.toFixed(6)}, ${lon.toFixed(6)}), history size: ${this.locationHistory.length}`);
+  }
+
+  /**
+   * Validate if movement to new location is realistic
+   * Returns validation result with reason if invalid
+   */
+  isValidMovement(newLat: number, newLon: number): { valid: boolean; reason?: string; calculatedSpeed?: number } {
+    if (this.locationHistory.length === 0) {
+      // No history yet, allow first location
+      return { valid: true };
+    }
+    
+    const lastLocation = this.locationHistory[this.locationHistory.length - 1];
+    const now = Date.now();
+    const timeDiffSeconds = (now - lastLocation.timestamp) / 1000;
+    
+    // Need at least 1 second between locations for speed calculation
+    if (timeDiffSeconds < 1) {
+      return { valid: true }; // Too fast to calculate, allow it
+    }
+    
+    // Calculate distance in meters
+    const distanceMeters = calculateDistance(
+      lastLocation.latitude,
+      lastLocation.longitude,
+      newLat,
+      newLon
+    );
+    
+    // Calculate speed in km/h
+    const speedKmh = (distanceMeters / 1000) / (timeDiffSeconds / 3600);
+    
+    console.log(`🚗 Movement validation: Distance: ${Math.round(distanceMeters)}m, Time: ${timeDiffSeconds.toFixed(1)}s, Speed: ${speedKmh.toFixed(1)} km/h`);
+    
+    // Check if speed exceeds maximum realistic speed
+    if (speedKmh > this.MAX_SPEED_KMH) {
+      return {
+        valid: false,
+        reason: `Movement too fast (${speedKmh.toFixed(1)} km/h). Possible GPS spoofing detected.`,
+        calculatedSpeed: speedKmh,
+      };
+    }
+    
+    // Check accuracy if available
+    if (lastLocation.accuracy && lastLocation.accuracy > this.MIN_ACCURACY_METERS) {
+      console.log(`⚠️ LocationValidator: Low GPS accuracy (${Math.round(lastLocation.accuracy)}m)`);
+      // Don't reject, but log warning
+    }
+    
+    return { valid: true, calculatedSpeed: speedKmh };
+  }
+
+  /**
+   * Detect teleportation (impossible distance in time period)
+   * More strict check than isValidMovement
+   */
+  detectTeleport(newLat: number, newLon: number): boolean {
+    if (this.locationHistory.length === 0) {
+      return false;
+    }
+    
+    const lastLocation = this.locationHistory[this.locationHistory.length - 1];
+    const now = Date.now();
+    const timeDiffSeconds = (now - lastLocation.timestamp) / 1000;
+    
+    // If less than 5 seconds, check for very large distances
+    if (timeDiffSeconds < 5) {
+      const distanceMeters = calculateDistance(
+        lastLocation.latitude,
+        lastLocation.longitude,
+        newLat,
+        newLon
+      );
+      
+      // If moved more than 1km in less than 5 seconds, it's likely teleportation
+      if (distanceMeters > 1000) {
+        console.log(`🚨 Teleportation detected: ${Math.round(distanceMeters)}m in ${timeDiffSeconds.toFixed(1)}s`);
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Get average movement speed over last N locations
+   */
+  getAverageSpeed(): number {
+    if (this.locationHistory.length < 2) {
+      return 0;
+    }
+    
+    let totalDistance = 0;
+    let totalTime = 0;
+    
+    for (let i = 1; i < this.locationHistory.length; i++) {
+      const prev = this.locationHistory[i - 1];
+      const curr = this.locationHistory[i];
+      
+      const distance = calculateDistance(
+        prev.latitude,
+        prev.longitude,
+        curr.latitude,
+        curr.longitude
+      );
+      
+      const timeDiff = (curr.timestamp - prev.timestamp) / 1000; // seconds
+      
+      if (timeDiff > 0) {
+        totalDistance += distance;
+        totalTime += timeDiff;
+      }
+    }
+    
+    if (totalTime === 0) {
+      return 0;
+    }
+    
+    // Convert to km/h
+    return (totalDistance / 1000) / (totalTime / 3600);
+  }
+
+  /**
+   * Clear history (for testing or reset)
+   */
+  clearHistory(): void {
+    this.locationHistory = [];
+    console.log('📍 LocationValidator: History cleared');
+  }
+}
+
+// Export singleton instance
+export const locationValidator = new LocationValidator();
+

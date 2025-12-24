@@ -11,7 +11,7 @@ import {
 import Constants from 'expo-constants';
 import MapView, { Marker, Circle } from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentLocation as fetchLocationFromDevice, calculateDistance } from '../../lib/location';
+import { getCurrentLocation as fetchLocationFromDevice, calculateDistance, locationValidator } from '../../lib/location';
 import { generatePersonalSpawns, getActivePersonalSpawns, refillPersonalSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
 
 // Import visibility radius constant
@@ -166,12 +166,22 @@ export default function MapScreen() {
           longitude: newLocation.coords.longitude,
           accuracy: newLocation.coords.accuracy,
         });
-        setLocation({
+        
+        const locationData = {
           latitude: newLocation.coords.latitude,
           longitude: newLocation.coords.longitude,
           accuracy: newLocation.coords.accuracy || undefined,
           timestamp: newLocation.timestamp,
-        });
+        };
+        
+        // Add location to validator for movement tracking
+        locationValidator.addLocation(
+          locationData.latitude,
+          locationData.longitude,
+          locationData.accuracy
+        );
+        
+        setLocation(locationData);
         console.log('🔍 LOCATION: Location state updated from watchPositionAsync');
       }
     ).then((subscription) => {
