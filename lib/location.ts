@@ -238,6 +238,23 @@ export class LocationValidator {
   private readonly MAX_HISTORY = 10;
   private readonly MAX_SPEED_KMH = 50; // Max realistic speed (city speed limit, walking/biking/slow driving)
   private readonly MIN_ACCURACY_METERS = 100; // GPS accuracy threshold
+  
+  // Speed tier constants
+  private readonly MAX_SPEED_WARNING_KMH = 50; // Soft limit - show warning
+  private readonly MAX_SPEED_SILENT_BAN_KMH = 150; // Hard limit - silent block
+  private readonly SILENT_BAN_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+  private readonly COOLDOWN_DURATION_MS = 60 * 1000; // 1 minute under 50 km/h to unlock
+  
+  // Ban and cooldown tracking
+  private silentBanUntil: number | null = null; // Timestamp when ban expires
+  private lastValidMovementTime: number | null = null; // Last time speed was under 50 km/h
+  private consecutiveSlowMovements: number = 12; // Counter for cooldown (12 = unlocked, starts unlocked for normal users)
+  
+  // Store current speed tier status
+  private currentSpeedTierStatus: {
+    tier: 'normal' | 'warning' | 'silent_ban';
+    calculatedSpeed?: number;
+  } | null = null;
 
   /**
    * Add location to history for movement tracking
@@ -262,8 +279,138 @@ export class LocationValidator {
   }
 
   /**
+   * Get speed tier status based on current movement
+   * Returns detailed status about speed tier, bans, and warnings
+   */
+  getSpeedTierStatus(): {
+    tier: 'normal' | 'warning' | 'silent_ban';
+    isBanned: boolean;
+    shouldShowWarning: boolean;
+    shouldHideSpawns: boolean;
+    banExpiresIn?: number;
+    cooldownProgress?: number;
+    calculatedSpeed?: number;
+    message?: string;
+  } {
+    const now = Date.now();
+    
+    // Check if silent ban is active
+    if (this.silentBanUntil && now < this.silentBanUntil) {
+      const banExpiresIn = this.silentBanUntil - now;
+      return {
+        tier: 'silent_ban',
+        isBanned: true,
+        shouldShowWarning: false, // Silent - don't alert cheaters
+        shouldHideSpawns: true,
+        banExpiresIn,
+        calculatedSpeed: this.currentSpeedTierStatus?.calculatedSpeed,
+      };
+    }
+    
+    // If ban expired, clear it
+    if (this.silentBanUntil && now >= this.silentBanUntil) {
+      this.silentBanUntil = null;
+    }
+    
+    // Calculate speed from last movement
+    let calculatedSpeed = 0;
+    if (this.locationHistory.length >= 2) {
+      const lastLocation = this.locationHistory[this.locationHistory.length - 1];
+      const prevLocation = this.locationHistory[this.locationHistory.length - 2];
+      const timeDiffSeconds = (lastLocation.timestamp - prevLocation.timestamp) / 1000;
+      
+      if (timeDiffSeconds >= 1) {
+        const distanceMeters = calculateDistance(
+          prevLocation.latitude,
+          prevLocation.longitude,
+          lastLocation.latitude,
+          lastLocation.longitude
+        );
+        calculatedSpeed = (distanceMeters / 1000) / (timeDiffSeconds / 3600);
+      }
+    }
+    
+    // Store calculated speed for later use
+    this.currentSpeedTierStatus = {
+      tier: 'normal',
+      calculatedSpeed,
+    };
+    
+    // Check for silent ban tier (150+ km/h)
+    if (calculatedSpeed >= this.MAX_SPEED_SILENT_BAN_KMH) {
+      // Activate silent ban
+      this.silentBanUntil = now + this.SILENT_BAN_DURATION_MS;
+      this.consecutiveSlowMovements = 0; // Reset cooldown
+      console.log(`🔒 Silent ban activated: Speed ${calculatedSpeed.toFixed(1)} km/h exceeds ${this.MAX_SPEED_SILENT_BAN_KMH} km/h`);
+      
+      return {
+        tier: 'silent_ban',
+        isBanned: true,
+        shouldShowWarning: false,
+        shouldHideSpawns: true,
+        banExpiresIn: this.SILENT_BAN_DURATION_MS,
+        calculatedSpeed,
+      };
+    }
+    
+    // Check for warning tier (50-150 km/h)
+    if (calculatedSpeed >= this.MAX_SPEED_WARNING_KMH) {
+      // Reset cooldown counter
+      this.consecutiveSlowMovements = 0;
+      this.currentSpeedTierStatus.tier = 'warning';
+      
+      return {
+        tier: 'warning',
+        isBanned: false,
+        shouldShowWarning: true,
+        shouldHideSpawns: true,
+        calculatedSpeed,
+        message: "⚠️ You're moving too fast! Slow down to collect NFTs.",
+        cooldownProgress: 0,
+      };
+    }
+    
+    // Normal tier (< 50 km/h)
+    // Track consecutive slow movements for cooldown
+    // If user was previously speeding, increment counter until cooldown completes
+    if (this.consecutiveSlowMovements < 12) {
+      this.consecutiveSlowMovements++;
+    }
+    this.lastValidMovementTime = now;
+    
+    let shouldHideSpawns = false;
+    let cooldownProgress = 1.0; // Default to unlocked
+    
+    // After 12 consecutive slow movements (60 seconds at 5-second intervals), unlock spawns
+    if (this.consecutiveSlowMovements >= 12) {
+      shouldHideSpawns = false;
+      cooldownProgress = 1.0; // 100% complete
+      if (this.currentSpeedTierStatus) {
+        this.currentSpeedTierStatus.tier = 'normal';
+      }
+    } else {
+      // Still in cooldown after speeding, hide spawns
+      shouldHideSpawns = true;
+      cooldownProgress = this.consecutiveSlowMovements / 12;
+      if (this.currentSpeedTierStatus) {
+        this.currentSpeedTierStatus.tier = 'warning';
+      }
+    }
+    
+    return {
+      tier: shouldHideSpawns ? 'warning' : 'normal',
+      isBanned: false,
+      shouldShowWarning: false,
+      shouldHideSpawns,
+      calculatedSpeed,
+      cooldownProgress,
+    };
+  }
+
+  /**
    * Validate if movement to new location is realistic
    * Returns validation result with reason if invalid
+   * Note: This method tracks movement but doesn't block it - use getSpeedTierStatus() for tier checks
    */
   isValidMovement(newLat: number, newLon: number): { valid: boolean; reason?: string; calculatedSpeed?: number } {
     if (this.locationHistory.length === 0) {
@@ -293,11 +440,15 @@ export class LocationValidator {
     
     console.log(`🚗 Movement validation: Distance: ${Math.round(distanceMeters)}m, Time: ${timeDiffSeconds.toFixed(1)}s, Speed: ${speedKmh.toFixed(1)} km/h`);
     
-    // Check if speed exceeds maximum realistic speed
-    if (speedKmh > this.MAX_SPEED_KMH) {
+    // Get speed tier status (updates internal state)
+    const tierStatus = this.getSpeedTierStatus();
+    
+    // For collection validation, still check the original 50 km/h limit
+    // This allows normal validation errors to show to users in 50-150 km/h range
+    if (speedKmh > this.MAX_SPEED_KMH && speedKmh < this.MAX_SPEED_SILENT_BAN_KMH) {
       return {
         valid: false,
-        reason: `Movement too fast (${speedKmh.toFixed(1)} km/h). Possible GPS spoofing detected.`,
+        reason: `Movement too fast (${speedKmh.toFixed(1)} km/h). Please slow down to collect NFTs.`,
         calculatedSpeed: speedKmh,
       };
     }
@@ -379,6 +530,34 @@ export class LocationValidator {
     
     // Convert to km/h
     return (totalDistance / 1000) / (totalTime / 3600);
+  }
+
+  /**
+   * Check if NFT collection is allowed (respects silent ban)
+   * Returns { allowed: boolean, reason?: string }
+   * Note: Silent bans return { allowed: false } with NO reason to avoid alerting cheaters
+   */
+  canCollectNFT(): { allowed: boolean; reason?: string } {
+    const now = Date.now();
+    
+    // Check if silent ban is active
+    if (this.silentBanUntil && now < this.silentBanUntil) {
+      // Silent ban active - return false with NO reason
+      return { allowed: false };
+    }
+    
+    // Ban expired or no ban - allow collection
+    return { allowed: true };
+  }
+
+  /**
+   * Clear ban (for testing/admin purposes)
+   */
+  clearBan(): void {
+    this.silentBanUntil = null;
+    this.consecutiveSlowMovements = 0;
+    this.lastValidMovementTime = null;
+    console.log('📍 LocationValidator: Ban cleared');
   }
 
   /**

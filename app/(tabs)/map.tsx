@@ -25,6 +25,7 @@ import { spacing } from '../../constants/spacing';
 import Button from '../../components/common/Button';
 import PersonalSpawnMarker from '../../components/map/PersonalSpawnMarker';
 import CollectionModal from '../../components/map/CollectionModal';
+import SpeedWarningBanner from '../../components/map/SpeedWarningBanner';
 import { useAuth } from '../../lib/auth-context';
 import * as Location from 'expo-location';
 
@@ -42,6 +43,8 @@ export default function MapScreen() {
   const [allActiveSpawns, setAllActiveSpawns] = useState<PersonalSpawn[]>([]); // All active spawns in 2km buffer (for smooth reveal)
   const [selectedSpawn, setSelectedSpawn] = useState<PersonalSpawn | null>(null);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
+  const [showSpeedWarning, setShowSpeedWarning] = useState(false);
+  const [speedTierStatus, setSpeedTierStatus] = useState<ReturnType<typeof locationValidator.getSpeedTierStatus> | null>(null);
   
   console.log('🔍 LOCATION: Initial state values - location:', location, 'loading:', loading);
   
@@ -82,6 +85,14 @@ export default function MapScreen() {
   useEffect(() => {
     if (!location || !user?.id) return;
     
+    // Check speed tier status - if spawns should be hidden, don't update spawns
+    // Use stored tier status if available, otherwise get current status
+    const tierStatus = speedTierStatus || locationValidator.getSpeedTierStatus();
+    if (tierStatus.shouldHideSpawns) {
+      console.log('🚫 Spawns hidden due to high speed');
+      return; // Skip spawn update - freeze current view
+    }
+    
     // Only reload if location changed significantly (more than 200m)
     // This ensures buffer zone spawns become visible as player explores
     const shouldReload = !prevLocationRef.current || 
@@ -117,7 +128,7 @@ export default function MapScreen() {
         console.log(`📍 Location changed: ${visibleSpawns.length} visible spawns (filtered from ${allActiveSpawns.length} total)`);
       }
     }
-  }, [location?.latitude, location?.longitude, user?.id, spawns.length, allActiveSpawns.length]);
+  }, [location?.latitude, location?.longitude, user?.id, spawns.length, allActiveSpawns.length, speedTierStatus]);
 
 
   const initializeLocation = async () => {
@@ -180,6 +191,26 @@ export default function MapScreen() {
           locationData.longitude,
           locationData.accuracy
         );
+        
+        // Get speed tier status after adding location
+        const tierStatus = locationValidator.getSpeedTierStatus();
+        setSpeedTierStatus(tierStatus);
+        
+        // Update warning visibility
+        if (tierStatus.shouldShowWarning) {
+          setShowSpeedWarning(true);
+        } else {
+          setShowSpeedWarning(false);
+        }
+        
+        // Debug logging
+        console.log(`🚗 Speed tier: ${tierStatus.tier}, Speed: ${tierStatus.calculatedSpeed?.toFixed(1) || 0} km/h`);
+        if (tierStatus.isBanned) {
+          console.log(`🔒 Silent ban active, expires in ${tierStatus.banExpiresIn}ms`);
+        }
+        if (tierStatus.cooldownProgress !== undefined && tierStatus.cooldownProgress < 1) {
+          console.log(`⏳ Cooldown: ${Math.round(tierStatus.cooldownProgress * 12)}/12 (${Math.round(tierStatus.cooldownProgress * 100)}%)`);
+        }
         
         setLocation(locationData);
         console.log('🔍 LOCATION: Location state updated from watchPositionAsync');
@@ -506,6 +537,14 @@ export default function MapScreen() {
   if (isExpoGo) {
     return (
       <View style={styles.container}>
+        {/* Speed Warning Banner */}
+        {showSpeedWarning && (
+          <SpeedWarningBanner 
+            visible={showSpeedWarning}
+            onDismiss={() => setShowSpeedWarning(false)}
+          />
+        )}
+        
         <View style={styles.expoGoContainer}>
           <View style={styles.expoGoHeader}>
             <Text style={styles.expoGoTitle}>📍 Your Location</Text>
@@ -651,8 +690,16 @@ export default function MapScreen() {
             onPress={handleSpawnPress}
             showCollectionRadius={true}
           />
-        ))}
+        )        )}
       </MapView>
+
+      {/* Speed Warning Banner */}
+      {showSpeedWarning && (
+        <SpeedWarningBanner 
+          visible={showSpeedWarning}
+          onDismiss={() => setShowSpeedWarning(false)}
+        />
+      )}
 
       {/* Spawn count indicator */}
       <View style={styles.spawnIndicator}>

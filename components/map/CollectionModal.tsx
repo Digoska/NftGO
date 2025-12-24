@@ -124,6 +124,18 @@ export default function CollectionModal({
       userLocation.accuracy
     );
     
+    // Check for silent collection ban (don't show error to cheater)
+    const collectionCheck = locationValidator.canCollectNFT();
+    if (!collectionCheck.allowed) {
+      console.log('🔒 Collection blocked due to silent ban (no message shown)');
+      // Silently fail - don't show error to cheater
+      // Just close modal after a brief delay to seem natural
+      setTimeout(() => {
+        onClose();
+      }, 500);
+      return;
+    }
+    
     // Validate movement before collection
     const movementValidation = locationValidator.isValidMovement(
       userLocation.latitude,
