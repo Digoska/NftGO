@@ -892,6 +892,8 @@ export async function cleanupExpiredSpawns(userId?: string): Promise<number> {
 /**
  * Cleans up spawns that are too far away from the user (beyond cleanup radius)
  * This prevents database bloat from spawns that are no longer relevant
+ * 
+ * SECURITY: Uses RPC function to bypass RLS for secure deletion
  */
 async function cleanupDistantSpawns(
   userId: string,
@@ -899,60 +901,29 @@ async function cleanupDistantSpawns(
   userLon: number
 ): Promise<number> {
   try {
-    // Fetch all active (uncollected) spawns
-    const { data, error } = await supabase
-      .from('personal_spawns')
-      .select('id, latitude, longitude')
-      .eq('user_id', userId)
-      .eq('collected', false)
-      .gt('expires_at', new Date().toISOString());
-    
-    if (error) {
-      console.error('Error fetching spawns for cleanup:', error);
-      return 0;
-    }
-    
-    if (!data || data.length === 0) {
-      return 0;
-    }
-    
-    // Find spawns beyond cleanup radius (with 100m buffer to prevent race conditions)
-    const distantSpawnIds: string[] = [];
-    const CLEANUP_BUFFER_METERS = 100; // Safety buffer to prevent cleanup during collection
-    
-    for (const spawn of data) {
-      const distance = calculateDistance(
-        userLat,
-        userLon,
-        spawn.latitude,
-        spawn.longitude
-      );
-      
-      // Only cleanup spawns well beyond the cleanup radius
-      if (distance > CLEANUP_RADIUS_METERS + CLEANUP_BUFFER_METERS) {
-        distantSpawnIds.push(spawn.id);
+    // Call secure RPC function to cleanup distant spawns
+    // Server-side function calculates distances and deletes securely
+    const { data: deletedCount, error: rpcError } = await supabase.rpc(
+      'cleanup_distant_personal_spawns',
+      {
+        p_user_id: userId,
+        p_user_lat: userLat,
+        p_user_lon: userLon,
+        p_cleanup_radius_meters: 2100 // 2000m cleanup radius + 100m buffer
       }
-    }
+    );
     
-    console.log(`🧹 Cleanup check: ${data.length} total spawns, ${distantSpawnIds.length} beyond ${CLEANUP_RADIUS_METERS + CLEANUP_BUFFER_METERS}m`);
-    
-    if (distantSpawnIds.length === 0) {
+    if (rpcError) {
+      console.error('Error cleaning up distant spawns:', rpcError);
       return 0;
     }
     
-    // Delete distant spawns
-    const { error: deleteError } = await supabase
-      .from('personal_spawns')
-      .delete()
-      .in('id', distantSpawnIds);
-    
-    if (deleteError) {
-      console.error('Error deleting distant spawns:', deleteError);
-      return 0;
+    const count = deletedCount || 0;
+    if (count > 0) {
+      console.log(`🧹 Cleaned up ${count} distant spawns (beyond 2100m)`);
     }
     
-    console.log(`Cleaned up ${distantSpawnIds.length} distant spawns (beyond ${CLEANUP_RADIUS_METERS}m)`);
-    return distantSpawnIds.length;
+    return count;
     
   } catch (error) {
     console.error('Error in cleanupDistantSpawns:', error);
@@ -1010,17 +981,19 @@ export async function forceRefreshSpawns(
   try {
     
     // 1. Delete ALL personal spawns for this user (both collected and uncollected)
-    const { error: deleteError } = await supabase
-      .from('personal_spawns')
-      .delete()
-      .eq('user_id', userId);
+    // SECURITY: Uses RPC function to bypass RLS for secure deletion
+    const { data: deletedCount, error: deleteError } = await supabase.rpc(
+      'force_delete_personal_spawns',
+      { p_user_id: userId }
+    );
     
     if (deleteError) {
       console.error('Error deleting old spawns:', deleteError);
       // Continue anyway - try to generate new spawns
     }
     
-    console.log('Deleted all personal spawns, generating new ones...');
+    const count = deletedCount || 0;
+    console.log(`Deleted ${count} personal spawns, generating new ones...`);
     
     // 2. Activate spawn_generator role for authorized inserts
     const { error: authError } = await supabase.rpc('authorize_spawn_generation');
