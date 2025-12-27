@@ -135,11 +135,11 @@ export async function collectPersonalNFT(
     
     // Call atomic server-side collection function
     const { data, error } = await supabase.rpc('collect_spawn_atomic', {
-      user_id: userId,
-      spawn_id: spawnId,
-      nft_id: spawn.nft_id,
-      user_lat: userLat,
-      user_lon: userLon,
+      p_user_id: userId,
+      p_spawn_id: spawnId,
+      p_nft_id: spawn.nft_id,
+      p_user_lat: userLat,
+      p_user_lon: userLon,
     });
     
     if (error) {

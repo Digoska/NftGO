@@ -12,13 +12,14 @@ export interface AddAllNFTsResult {
 /**
  * Adds all NFTs from the database to the current user's account
  * 
+ * ⚠️ WARNING: This function is incompatible with RLS policies that block direct inserts.
+ * With RLS enabled, use the SQL script in docs/api/ADD_ALL_NFTS_TO_ACCOUNT.sql instead,
+ * which runs server-side and can bypass RLS using SECURITY DEFINER.
+ * 
  * This function:
  * 1. Fetches all NFTs from the nfts table
  * 2. Checks which ones the user already has
- * 3. Adds only the missing ones
- * 4. Returns statistics about the operation
- * 
- * Note: Stats will be automatically updated by the database trigger
+ * 3. Attempts to add missing ones via RPC (requires spawn_id, which we don't have)
  * 
  * @param userId - The current user's ID
  * @returns Result object with counts and success status
@@ -27,103 +28,20 @@ export async function addAllNFTsToAccount(userId: string): Promise<AddAllNFTsRes
   try {
     console.log('🔄 Starting to add all NFTs to account...');
     
-    // Step 1: Get all NFTs
-    const { data: allNFTs, error: nftsError } = await supabase
-      .from('nfts')
-      .select('id, name, rarity');
-    
-    if (nftsError) {
-      console.error('❌ Error fetching NFTs:', nftsError);
-      return {
-        success: false,
-        added: 0,
-        skipped: 0,
-        total: 0,
-        error: `Failed to fetch NFTs: ${nftsError.message}`,
-      };
-    }
-    
-    if (!allNFTs || allNFTs.length === 0) {
-      return {
-        success: true,
-        added: 0,
-        skipped: 0,
-        total: 0,
-        error: 'No NFTs found in database',
-      };
-    }
-    
-    console.log(`📦 Found ${allNFTs.length} NFTs in database`);
-    
-    // Step 2: Get user's existing NFTs
-    const { data: userNFTs, error: userNFTsError } = await supabase
-      .from('user_nfts')
-      .select('nft_id')
-      .eq('user_id', userId);
-    
-    if (userNFTsError) {
-      console.error('❌ Error fetching user NFTs:', userNFTsError);
-      return {
-        success: false,
-        added: 0,
-        skipped: 0,
-        total: allNFTs.length,
-        error: `Failed to fetch your existing NFTs: ${userNFTsError.message}`,
-      };
-    }
-    
-    const existingNFTIds = new Set(userNFTs?.map(un => un.nft_id) || []);
-    console.log(`✅ You already have ${existingNFTIds.size} NFTs`);
-    
-    // Step 3: Filter out NFTs user already has
-    const nftsToAdd = allNFTs.filter(nft => !existingNFTIds.has(nft.id));
-    
-    if (nftsToAdd.length === 0) {
-      return {
-        success: true,
-        added: 0,
-        skipped: allNFTs.length,
-        total: allNFTs.length,
-      };
-    }
-    
-    console.log(`➕ Adding ${nftsToAdd.length} new NFTs to your account...`);
-    
-    // Step 4: Insert all missing NFTs
-    const nftsToInsert = nftsToAdd.map(nft => ({
-      user_id: userId,
-      nft_id: nft.id,
-      spawn_id: null,
-      collected_at: new Date().toISOString(),
-    }));
-    
-    const { data: insertedNFTs, error: insertError } = await supabase
-      .from('user_nfts')
-      .insert(nftsToInsert)
-      .select('id');
-    
-    if (insertError) {
-      console.error('❌ Error inserting NFTs:', insertError);
-      return {
-        success: false,
-        added: 0,
-        skipped: existingNFTIds.size,
-        total: allNFTs.length,
-        error: `Failed to add NFTs: ${insertError.message}`,
-      };
-    }
-    
-    const addedCount = insertedNFTs?.length || 0;
-    const skippedCount = existingNFTIds.size;
-    
-    console.log(`✅ Successfully added ${addedCount} NFTs to your account!`);
-    console.log(`⏭️  Skipped ${skippedCount} NFTs you already had`);
+    // RLS BLOCKED: Direct inserts into user_nfts are now blocked by RLS policies.
+    // This function cannot work with RLS enabled because:
+    // 1. collect_spawn_atomic RPC requires a spawn_id (we're adding NFTs without spawns)
+    // 2. Direct inserts are blocked by RLS
+    // 
+    // SOLUTION: Use the SQL script in docs/api/ADD_ALL_NFTS_TO_ACCOUNT.sql
+    // which runs server-side and can bypass RLS using SECURITY DEFINER.
     
     return {
-      success: true,
-      added: addedCount,
-      skipped: skippedCount,
-      total: allNFTs.length,
+      success: false,
+      added: 0,
+      skipped: 0,
+      total: 0,
+      error: 'This function is incompatible with RLS policies. Please use the SQL script in docs/api/ADD_ALL_NFTS_TO_ACCOUNT.sql instead, which runs server-side and can bypass RLS.',
     };
     
   } catch (error: any) {
