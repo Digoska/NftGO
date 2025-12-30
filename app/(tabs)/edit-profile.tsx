@@ -163,6 +163,18 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
+    // Validate username with exact regex pattern before other checks
+    if (!username.trim()) {
+      setUsernameError('Username is required');
+      return;
+    }
+
+    const usernameRegex = /^[a-zA-Z0-9_-]{3,20}$/;
+    if (!usernameRegex.test(username.trim())) {
+      setUsernameError('Username must be 3-20 characters and contain only letters, numbers, _ and -');
+      return;
+    }
+
     if (!(await validateUsername(username))) {
       return;
     }
@@ -253,6 +265,13 @@ export default function EditProfileScreen() {
           console.error('Error uploading avatar:', error);
           // Keep old avatar if upload fails
         }
+      }
+
+      // Validate avatar_url before sending update
+      if (avatarUrl && !avatarUrl.startsWith('http://') && !avatarUrl.startsWith('https://')) {
+        Alert.alert('Error', 'Invalid avatar URL. Must start with http:// or https://');
+        setLoading(false);
+        return;
       }
 
       // Clean X username (remove @ if present)

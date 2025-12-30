@@ -377,16 +377,25 @@ export default function CollectionModal({
                   style={[
                     styles.collectButton, 
                     { backgroundColor: rarityColor },
-                    timeInfo.isExpired && styles.collectButtonDisabled
+                    (timeInfo.isExpired || state === 'collecting') && styles.collectButtonDisabled
                   ]}
                   onPress={handleCollect}
                   activeOpacity={0.8}
-                  disabled={timeInfo.isExpired}
+                  disabled={timeInfo.isExpired || state === 'collecting'}
                 >
-                  <Ionicons name="hand-left" size={20} color="#FFFFFF" />
-                  <Text style={styles.collectButtonText}>
-                    {timeInfo.isExpired ? 'Expired' : 'Collect NFT'}
-                  </Text>
+                  {state === 'collecting' ? (
+                    <>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text style={styles.collectButtonText}>Processing...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="hand-left" size={20} color="#FFFFFF" />
+                      <Text style={styles.collectButtonText}>
+                        {timeInfo.isExpired ? 'Expired' : 'Collect NFT'}
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               ) : (
                 <View style={styles.tooFarContainer}>
@@ -399,13 +408,6 @@ export default function CollectionModal({
             </>
           )}
           
-          {/* Collecting State */}
-          {state === 'collecting' && (
-            <View style={styles.collectingContainer}>
-              <ActivityIndicator size="large" color={rarityColor} />
-              <Text style={styles.collectingText}>Collecting...</Text>
-            </View>
-          )}
           
           {/* Success State */}
           {state === 'success' && (
