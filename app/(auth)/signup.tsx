@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -44,6 +44,8 @@ export default function SignupScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const usernameCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { signInWithGoogle } = useAuth();
 
   const validateEmail = () => {
@@ -352,7 +354,27 @@ export default function SignupScreen() {
 
       if (updateError) {
         console.error('Error updating profile:', updateError);
-        Alert.alert('Error', updateError.message || 'Failed to save profile');
+        
+        // Handle specific error cases
+        let errorMessage = 'Failed to save profile';
+        
+        // Check for unique constraint violation (duplicate username)
+        // PostgreSQL error code 23505 or constraint name "users_username_key"
+        const isDuplicateUsername = 
+          updateError.code === '23505' || 
+          updateError.message?.includes('users_username_key') ||
+          updateError.message?.toLowerCase().includes('username') && 
+          (updateError.message?.toLowerCase().includes('unique') || 
+           updateError.message?.toLowerCase().includes('duplicate'));
+        
+        if (isDuplicateUsername) {
+          errorMessage = 'This username is already taken. Please choose another.';
+          setUsernameError('This username is already taken. Please choose another.');
+        } else {
+          errorMessage = updateError.message || errorMessage;
+        }
+        
+        Alert.alert('Error', errorMessage);
         setLoading(false);
         return;
       }
@@ -672,10 +694,59 @@ export default function SignupScreen() {
                 onChangeText={(text) => {
                   setUsername(text);
                   if (usernameError) setUsernameError('');
+                  
+                  // Debounced username availability check
+                  if (usernameCheckTimeoutRef.current) {
+                    clearTimeout(usernameCheckTimeoutRef.current);
+                  }
+                  
+                  // Only check if username meets basic requirements
+                  const trimmedUsername = text.trim().toLowerCase();
+                  if (trimmedUsername.length >= 3) {
+                    usernameCheckTimeoutRef.current = setTimeout(async () => {
+                      setIsCheckingUsername(true);
+                      try {
+                        const { data, error } = await supabase
+                          .from('users')
+                          .select('id')
+                          .eq('username', trimmedUsername)
+                          .single();
+                        
+                        // If data exists, username is taken
+                        if (data) {
+                          setUsernameError('Username is already taken');
+                        } else if (error) {
+                          // If error code is PGRST116, it means no row found - username is available
+                          if (error.code === 'PGRST116') {
+                            // Username is available, clear any previous error
+                            setUsernameError('');
+                          } else {
+                            // Some other error occurred
+                            console.error('Error checking username:', error);
+                          }
+                        } else {
+                          // No error and no data (shouldn't happen with .single(), but handle it)
+                          setUsernameError('');
+                        }
+                      } catch (error: any) {
+                        // Ignore "not found" errors (PGRST116) - means username is available
+                        if (error.code === 'PGRST116') {
+                          setUsernameError('');
+                        } else {
+                          console.error('Error checking username:', error);
+                        }
+                      } finally {
+                        setIsCheckingUsername(false);
+                      }
+                    }, 500); // 500ms debounce
+                  }
                 }}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              {isCheckingUsername && !usernameError && (
+                <Text style={styles.inputHint}>Checking availability...</Text>
+              )}
               {usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
               <Text style={styles.inputHint}>
                 Username cannot be an email. Use letters, numbers, _ and -
@@ -711,6 +782,15 @@ export default function SignupScreen() {
         );
     }
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (usernameCheckTimeoutRef.current) {
+        clearTimeout(usernameCheckTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <KeyboardAvoidingView
