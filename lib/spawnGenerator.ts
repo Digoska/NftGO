@@ -75,16 +75,17 @@ export async function getSpawnsWithAutoGeneration(
       };
     }
     
-    // Step 2: Check total spawn count (visible + hidden in buffer zone)
+    // Step 2: Check visible spawn count (FIX: Buffer Zone Starvation)
+    // If user has 20 spawns but all are 2km+ away (0 visible), we need to refill
     const allActiveSpawns = await getActivePersonalSpawns(userId);
     const totalActiveCount = allActiveSpawns.length;
+    const VISIBLE_TARGET_MIN = 5; // Minimum visible spawns to maintain
     
     console.log(`📍 Spawn check: ${visibleSpawns.length} visible, ${totalActiveCount} total active`);
     
-    // Step 3: If < 15 spawns, trigger secure generation
-    const TARGET_MIN = 15;
-    if (totalActiveCount < TARGET_MIN) {
-      console.log(`🔄 Generation needed: ${totalActiveCount} < ${TARGET_MIN}, triggering secure generation...`);
+    // Step 3: If < 5 VISIBLE spawns, trigger secure generation
+    if (visibleSpawns.length < VISIBLE_TARGET_MIN) {
+      console.log(`🔄 Generation needed: ${visibleSpawns.length} visible < ${VISIBLE_TARGET_MIN}, triggering secure generation...`);
       
       const generationResult = await generatePersonalSpawnsSecure(
         userId,
@@ -489,13 +490,17 @@ async function hasActiveSpawnsNearLocation(
  * Generates new personal spawns for a user at their current location
  * Uses sector-based balancing to prevent clustering
  * @param isRefill - If true, spawns only in buffer zone (1-2km). If false, spawns across full 2km circle.
+ * @param minDistance - Minimum distance from player (meters). If not provided, uses default based on isRefill.
+ * @param maxDistance - Maximum distance from player (meters). If not provided, uses SPAWN_RADIUS_METERS (2000m).
  */
 async function createNewSpawns(
   userId: string,
   userLat: number,
   userLon: number,
   count?: number,
-  isRefill: boolean = false
+  isRefill: boolean = false,
+  minDistance?: number,
+  maxDistance?: number
 ): Promise<PersonalSpawn[]> {
   const spawnCount = count || Math.floor(Math.random() * (SPAWN_COUNT_MAX - SPAWN_COUNT_MIN + 1)) + SPAWN_COUNT_MIN;
   const spawns: Partial<PersonalSpawn>[] = [];
@@ -560,24 +565,24 @@ async function createNewSpawns(
         location.longitude
       );
       
-      // Validate spawn distance based on generation type
-      let validationPassed = false;
-      if (isRefill) {
-        // Refill spawns: Must be in buffer zone (1-2km from player)
-        validationPassed = distanceFromPlayer >= REFILL_MIN_DISTANCE_METERS && 
-                          distanceFromPlayer <= REFILL_MAX_DISTANCE_METERS;
-      } else {
-        // Initial spawns: Must be at least MIN_SPAWN_DISTANCE_METERS from player
-        validationPassed = distanceFromPlayer >= MIN_SPAWN_DISTANCE_METERS;
-      }
+      // Determine distance constraints based on parameters
+      const effectiveMinDistance = minDistance !== undefined 
+        ? minDistance 
+        : (isRefill ? REFILL_MIN_DISTANCE_METERS : MIN_SPAWN_DISTANCE_METERS);
+      
+      const effectiveMaxDistance = maxDistance !== undefined 
+        ? maxDistance 
+        : (isRefill ? REFILL_MAX_DISTANCE_METERS : SPAWN_RADIUS_METERS);
+      
+      // Validate spawn distance
+      const validationPassed = distanceFromPlayer >= effectiveMinDistance && 
+                               distanceFromPlayer <= effectiveMaxDistance;
       
       // If validation failed, check retry limit
       if (!validationPassed) {
         if (retryCount >= maxRetries) {
-          const zone = isRefill 
-            ? `buffer zone (${REFILL_MIN_DISTANCE_METERS}-${REFILL_MAX_DISTANCE_METERS}m)`
-            : `minimum distance (${MIN_SPAWN_DISTANCE_METERS}m)`;
-          console.warn(`Failed to place spawn ${i + 1} at ${zone} after ${maxRetries} attempts, skipping`);
+          const zone = `${effectiveMinDistance}-${effectiveMaxDistance}m`;
+          console.warn(`Failed to place spawn ${i + 1} at distance ${zone} after ${maxRetries} attempts, skipping`);
           i++; // Skip this spawn after too many retries
           break;
         }
@@ -626,38 +631,83 @@ async function createNewSpawns(
 }
 
 /**
- * Refills personal spawns to ensure user has enough active spawns
- * Target: 15-20 spawns
- * Generates spawns ONLY in buffer zone (1-2km from player) to encourage exploration
+ * Refills personal spawns to ensure user has enough VISIBLE spawns
+ * Target: 5+ visible spawns (within 1km)
+ * 
+ * FIX: Buffer Zone Starvation
+ * - Now triggers based on VISIBLE spawn count, not total count
+ * - If user has 20 spawns but all are 2km+ away (0 visible), this will refill
+ * - Smart placement: 80% in buffer zone (1000-2000m), 20% closer (200-1000m) if local area is empty
  */
 export async function refillPersonalSpawns(
   userId: string,
   userLat: number,
   userLon: number,
-  currentCount: number
+  visibleCount: number
 ): Promise<PersonalSpawn[]> {
-  const targetMin = 15;
-  const targetMax = 20;
+  const VISIBLE_TARGET_MIN = 5; // Minimum visible spawns to maintain
   
-  // If we have enough spawns, don't generate more
-  if (currentCount >= targetMin) {
+  // If we have enough VISIBLE spawns, don't generate more
+  if (visibleCount >= VISIBLE_TARGET_MIN) {
     return [];
   }
   
-  // Calculate how many to generate
-  // We want to reach at least targetMin, potentially up to targetMax
-  const neededMin = targetMin - currentCount;
-  const neededMax = targetMax - currentCount;
+  // Calculate how many to generate to reach target
+  const neededMin = VISIBLE_TARGET_MIN - visibleCount;
+  const neededMax = Math.max(neededMin, 10); // Generate up to 10 spawns at once
   
   // Randomly choose how many to add (between needed min and max)
   const countToGenerate = Math.floor(Math.random() * (neededMax - neededMin + 1)) + neededMin;
   
   if (countToGenerate <= 0) return [];
   
-  console.log(`Refilling spawns: Current ${currentCount}, Target ${targetMin}-${targetMax}, Generating ${countToGenerate} in buffer zone (1-2km)`);
+  console.log(`🔄 Refilling spawns: ${visibleCount} visible (< ${VISIBLE_TARGET_MIN}), generating ${countToGenerate} with smart placement`);
   
-  // Pass isRefill=true to generate spawns only in buffer zone
-  return createNewSpawns(userId, userLat, userLon, countToGenerate, true);
+  // Smart placement: 80% buffer zone, 20% closer if local area is empty
+  const bufferZoneCount = Math.floor(countToGenerate * 0.8);
+  const localAreaCount = countToGenerate - bufferZoneCount;
+  
+  const allSpawns: PersonalSpawn[] = [];
+  
+  // Generate 80% in buffer zone (1000-2000m)
+  if (bufferZoneCount > 0) {
+    const bufferSpawns = await createNewSpawns(
+      userId, 
+      userLat, 
+      userLon, 
+      bufferZoneCount, 
+      true, // isRefill=true means buffer zone only
+      REFILL_MIN_DISTANCE_METERS // minDistance = 1000m
+    );
+    allSpawns.push(...bufferSpawns);
+  }
+  
+  // Generate 20% closer (200-1000m) if local area is empty
+  if (localAreaCount > 0 && visibleCount === 0) {
+    const localSpawns = await createNewSpawns(
+      userId, 
+      userLat, 
+      userLon, 
+      localAreaCount, 
+      false, // isRefill=false allows closer spawns
+      MIN_SPAWN_DISTANCE_METERS, // minDistance = 200m
+      1000 // maxDistance = 1000m (within visibility radius)
+    );
+    allSpawns.push(...localSpawns);
+  } else if (localAreaCount > 0) {
+    // If local area has some spawns, still generate in buffer zone
+    const extraBufferSpawns = await createNewSpawns(
+      userId, 
+      userLat, 
+      userLon, 
+      localAreaCount, 
+      true, // isRefill=true means buffer zone only
+      REFILL_MIN_DISTANCE_METERS // minDistance = 1000m
+    );
+    allSpawns.push(...extraBufferSpawns);
+  }
+  
+  return allSpawns;
 }
 
 /**
@@ -740,11 +790,11 @@ async function generatePersonalSpawnsInternal(
     
     console.log(`Found ${visibleSpawns.length} visible spawns (within ${VISIBILITY_RADIUS_METERS}m)`);
     
-    // Target: 15-20 total active spawns in system (not just visible)
-    const targetMin = 15;
-    const targetMax = 20;
+    // FIX: Buffer Zone Starvation - Check VISIBLE spawns, not total spawns
+    // If user has 20 spawns but all are 2km+ away (0 visible), we need to refill
+    const VISIBLE_TARGET_MIN = 5; // Minimum visible spawns to maintain
     
-    // Check total active spawns (not just visible) to determine if we need refill
+    // Check total active spawns for logging
     const allActiveSpawns = await getActivePersonalSpawns(userId);
     const totalActiveCount = allActiveSpawns.length;
     
@@ -753,25 +803,98 @@ async function generatePersonalSpawnsInternal(
     // Cold start detection: No visible spawns indicates new user or all expired
     const isColdStart = visibleSpawns.length === 0;
     
-    // If we have enough total spawns, return visible ones
-    if (totalActiveCount >= targetMin) {
-      console.log(`User has ${totalActiveCount} total active spawns (target: ${targetMin}-${targetMax}), returning ${visibleSpawns.length} visible`);
+    // If we have enough VISIBLE spawns, return them (even if total count is high)
+    if (visibleSpawns.length >= VISIBLE_TARGET_MIN) {
+      console.log(`User has ${visibleSpawns.length} visible spawns (target: ${VISIBLE_TARGET_MIN}+), returning visible spawns`);
       return { spawns: visibleSpawns, isNew: false };
     }
     
-    // Calculate how many new spawns to generate
-    const neededMin = targetMin - totalActiveCount;
-    const neededMax = targetMax - totalActiveCount;
+    // Calculate how many new spawns to generate to reach visible target
+    const neededMin = VISIBLE_TARGET_MIN - visibleSpawns.length;
+    const neededMax = Math.max(neededMin, 10); // Generate up to 10 spawns at once
     const countToGenerate = Math.floor(Math.random() * (neededMax - neededMin + 1)) + neededMin;
     
-    if (isColdStart) {
-      console.log(`Cold start detected: Generating ${countToGenerate} new spawns across full 2km circle (minimum 200m from player)`);
-    } else {
-      console.log(`Refill needed: Generating ${countToGenerate} new spawns in buffer zone (1-2km from player)`);
-    }
+    let newSpawns: PersonalSpawn[] = [];
     
-    // Generate new spawns: isRefill=false for cold start (full 2km), isRefill=true for refill (buffer zone only)
-    const newSpawns = await createNewSpawns(userId, userLat, userLon, countToGenerate, !isColdStart);
+    if (isColdStart) {
+      // Cold start: Generate spawns with smart placement
+      // 80% in buffer zone (1000-2000m), 20% closer (200-1000m) to populate local area
+      console.log(`Cold start detected: Generating ${countToGenerate} new spawns with smart placement`);
+      
+      const bufferZoneCount = Math.floor(countToGenerate * 0.8);
+      const localAreaCount = countToGenerate - bufferZoneCount;
+      
+      // Generate 80% in buffer zone (1000-2000m)
+      if (bufferZoneCount > 0) {
+        const bufferSpawns = await createNewSpawns(
+          userId, 
+          userLat, 
+          userLon, 
+          bufferZoneCount, 
+          true, // isRefill=true means buffer zone only
+          REFILL_MIN_DISTANCE_METERS // minDistance = 1000m
+        );
+        newSpawns.push(...bufferSpawns);
+      }
+      
+      // Generate 20% closer (200-1000m) to populate local area
+      if (localAreaCount > 0) {
+        const localSpawns = await createNewSpawns(
+          userId, 
+          userLat, 
+          userLon, 
+          localAreaCount, 
+          false, // isRefill=false allows closer spawns
+          MIN_SPAWN_DISTANCE_METERS, // minDistance = 200m
+          VISIBILITY_RADIUS_METERS // maxDistance = 1000m (within visibility radius)
+        );
+        newSpawns.push(...localSpawns);
+      }
+    } else {
+      // Refill: Use smart placement (80% buffer zone, 20% closer if local area is empty)
+      console.log(`Refill needed: ${visibleSpawns.length} visible (< ${VISIBLE_TARGET_MIN}), generating ${countToGenerate} with smart placement`);
+      
+      const bufferZoneCount = Math.floor(countToGenerate * 0.8);
+      const localAreaCount = countToGenerate - bufferZoneCount;
+      
+      // Generate 80% in buffer zone (1000-2000m)
+      if (bufferZoneCount > 0) {
+        const bufferSpawns = await createNewSpawns(
+          userId, 
+          userLat, 
+          userLon, 
+          bufferZoneCount, 
+          true, // isRefill=true means buffer zone only
+          REFILL_MIN_DISTANCE_METERS // minDistance = 1000m
+        );
+        newSpawns.push(...bufferSpawns);
+      }
+      
+      // Generate 20% closer (200-1000m) if local area is empty
+      if (localAreaCount > 0 && visibleSpawns.length === 0) {
+        const localSpawns = await createNewSpawns(
+          userId, 
+          userLat, 
+          userLon, 
+          localAreaCount, 
+          false, // isRefill=false allows closer spawns
+          MIN_SPAWN_DISTANCE_METERS, // minDistance = 200m
+          VISIBILITY_RADIUS_METERS // maxDistance = 1000m (within visibility radius)
+        );
+        newSpawns.push(...localSpawns);
+      } else if (localAreaCount > 0) {
+        // If local area has some spawns, still generate in buffer zone
+        const extraBufferSpawns = await createNewSpawns(
+          userId, 
+          userLat, 
+          userLon, 
+          localAreaCount, 
+          true, // isRefill=true means buffer zone only
+          REFILL_MIN_DISTANCE_METERS // minDistance = 1000m
+        );
+        newSpawns.push(...extraBufferSpawns);
+      }
+    }
     
     // Filter new spawns to only include visible ones for return
     const visibleNewSpawns = newSpawns.filter(spawn => {
