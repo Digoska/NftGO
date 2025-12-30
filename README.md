@@ -13,18 +13,38 @@ You walk around your city and collect NFTs at real locations. Open the app, see 
 
 ## Features
 
-- Location-based spawning - NFTs appear at GPS coordinates
-- 3D models, images, videos
-- Trading marketplace
-- Leveling system with XP and streaks
-- Leaderboards
-- Rarity system (Common, Rare, Epic, Legendary)
-- Some NFTs give gameplay boosts
-- VIP rewards for locking tokens
+- **Smart Location Spawning**:
+  - **Personal Spawns**: Unique spawns for each user.
+  - **Two-Zone System**: Active visible zone (<1km) and buffer zone refill (1-2km).
+  - **Sector Balancing**: Prevents clustering using 8 compass sectors.
+  - **Auto-Regeneration**: Intelligent refilling when visible spawns run low.
+- **Rich Media Support**:
+  - **3D Models**: Interactive GLTF models (External textures for Expo Go support).
+  - **Video NFTs**: Playable video collectibles.
+  - **Thumbnail System**: Auto-generated static previews for performance.
+- **Gamification**:
+  - **Leveling**: XP system with level-up rewards.
+  - **Streaks**: Daily collection streaks with coin bonuses.
+  - **Leaderboards**: Global ranking based on XP and collection value.
+  - **Rarity System**: Common (80%), Rare (16%), Epic (4%). Legendary reserved for global events.
+- **Notifications**:
+  - Smart alerts for nearby NFTs, streak reminders, and level-ups.
+  - Customizable preferences.
+- **Social & Wallet**:
+  - User profiles with stats and badges.
+  - Filterable wallet/collection view.
+  - Trading marketplace.
 
-## Tech
+## Tech Stack
 
-React Native + Expo for iOS and Android. TypeScript for types. Supabase for backend (database, auth, storage). Three.js for 3D rendering. React Native Maps for location stuff.
+- **Framework**: React Native + Expo (SDK 54)
+- **Language**: TypeScript
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **Backend**: Supabase (PostgreSQL, Auth, Storage, Edge Functions)
+- **Maps**: `react-native-maps`
+- **3D**: Three.js + React Three Fiber (`@react-three/fiber`)
+- **Media**: `expo-av`, `expo-image`
+- **Notifications**: `expo-notifications`
 
 ## Setup
 
@@ -43,54 +63,72 @@ EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-Then:
-1. Create a Supabase project
-2. Run `supabase-schema.sql` in the SQL Editor (run statements one at a time)
-3. Create storage buckets: `nfts` and `avatars` (both public)
-4. Set up OAuth in Authentication (Google, Apple)
+### Database & Security
 
-Run it:
+1. **Supabase Setup**:
+   - Run `supabase-schema.sql` in the SQL Editor.
+   - Run `security/STORAGE_BUCKET_POLICIES.sql` for storage security.
+   - Run `api/PERSONAL_SPAWNS_SETUP.sql` for the spawn system functions.
+
+2. **Storage Buckets**:
+   - `nfts` (Public)
+   - `avatars` (Public)
+
+3. **Authentication**:
+   - Enable Email/Password, Google, and Apple Sign In.
+
+### Running the App
 
 ```bash
 npm start
-npm run ios    # or npm run android
+# Press 'i' for iOS Simulator or 'a' for Android Emulator
 ```
 
-## Project structure
+## Security Architecture
+
+- **RLS Policies**: strict Row Level Security on all tables (`users`, `nfts`, `personal_spawns`).
+- **Secure Spawning**:
+  - Spawn generation logic is protected by server-side checks.
+  - Rate limiting via RPC functions (`check_spawn_generation_rate_limit`).
+  - Internal "spawn_generator" role for secure database operations.
+
+## Tooling & Scripts
+
+The `scripts/` folder contains utilities for asset management:
+- `generate-thumbnails.js`: Creates static thumbnails for 3D models/videos.
+- `update-nft-thumbnails.js`: Batch updates database with new thumbnail URLs.
+- `debug-drone.js`: Testing tools.
+
+## Known Issues
+
+- **GLB Models in Expo Go**: GLB files with embedded textures fail in Expo Go due to missing Blob support.
+  - **Fix**: Use GLTF + `.bin` + external textures. See `docs/3d-models/GLTF_UPLOAD_GUIDE.md`.
+
+## Project Structure
 
 ```
-app/              # Screens (auth, tabs)
-components/       # UI components
-lib/              # Utilities (supabase, location, etc)
-types/            # TypeScript types
-constants/        # Colors, spacing
+app/                 # Expo Router screens
+├── (auth)/          # Login, Signup, Onboarding
+├── (tabs)/          # Map, Wallet, Profile
+components/          # Reusable UI
+├── nft/             # ModelNFT, VideoNFT
+├── map/             # Map overlays, Markers
+docs/                # Extensive documentation
+├── 3d-models/       # Guides for 3D assets
+├── security/        # RLS and auth guides
+├── troubleshooting/ # Fixes for common issues
+lib/                 # Core logic
+├── spawnGenerator.ts # Smart spawn system
+├── notifications.ts  # Push notification service
+scripts/             # Asset generation tools
 ```
 
-## How it works
+## Documentation
 
-Map shows NFTs near you. Walk to the location, tap to collect. View your collection in the wallet, filter by rarity. Trade on the marketplace. Check your profile for stats and leaderboard rank.
-
-## Current status
-
-Working: auth, location spawning, collection, 3D models (GLTF), videos/images, gamification, profiles.
-
-Known issues: GLB with embedded textures doesn't work in Expo Go. Use GLTF with external textures instead.
-
-## 3D models
-
-Supports GLTF/GLB. For Expo Go, use GLTF with external textures. Check `docs/3d-models/GLTF_UPLOAD_GUIDE.md` for details.
-
-## Database
-
-Main tables: `users`, `nfts`, `user_nfts`, `user_stats`, `nft_spawns`. Full schema in `supabase-schema.sql`.
-
-## Contributing
-
-Hackathon project, but feel free to fork it. See `docs/CONTRIBUTING.md` if you want to contribute.
-
-## Docs
-
-Everything's in the `docs/` folder - setup guides, 3D model stuff, API docs, troubleshooting.
+Extensive documentation is available in `docs/`:
+- **Troubleshooting**: `docs/troubleshooting/` (30+ guides).
+- **Security**: `docs/security/`.
+- **Migrations**: `docs/migrations/` for database updates.
 
 ## License
 
@@ -99,5 +137,6 @@ MIT
 ---
 
 Built for a hackathon. Location-based NFT collection that combines real-world exploration with blockchain.
-
 [GitHub](https://github.com/Digoska/NftGO)
+
+
