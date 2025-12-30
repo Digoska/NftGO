@@ -19,7 +19,7 @@ import { collectPersonalNFT, formatDistance, getDistanceToSpawn, getTimeRemainin
 import { SPAWN_CONFIG } from '../../lib/spawnGenerator';
 import { getRarityColor, getRarityIcon } from './PersonalSpawnMarker';
 import WebViewModel from '../nft/WebViewModel';
-import { locationValidator } from '../../lib/location';
+import { locationValidator, updateUserLocation } from '../../lib/location';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -160,6 +160,10 @@ export default function CollectionModal({
     setState('collecting');
     
     try {
+      // Force immediate location update before collection for security validation
+      // This ensures the server has the latest location data for distance checks
+      await updateUserLocation(userId, userLocation, true);
+      
       const result = await collectPersonalNFT(
         userId,
         spawn.id,

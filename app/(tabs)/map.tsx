@@ -11,7 +11,7 @@ import {
 import Constants from 'expo-constants';
 import MapView, { Marker, Circle } from 'react-native-maps'; // Removed PROVIDER_DEFAULT
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentLocation as fetchLocationFromDevice, calculateDistance, locationValidator } from '../../lib/location';
+import { getCurrentLocation as fetchLocationFromDevice, calculateDistance, locationValidator, updateUserLocation } from '../../lib/location';
 import { getSpawnsWithAutoGeneration, getActivePersonalSpawns, cleanupExpiredSpawns, forceRefreshSpawns, SPAWN_CONFIG } from '../../lib/spawnGenerator';
 
 // Import visibility radius constant
@@ -211,6 +211,12 @@ export default function MapScreen() {
         if (tierStatus.cooldownProgress !== undefined && tierStatus.cooldownProgress < 1) {
           console.log(`⏳ Cooldown: ${Math.round(tierStatus.cooldownProgress * 12)}/12 (${Math.round(tierStatus.cooldownProgress * 100)}%)`);
         }
+        
+        // Update user location in database (throttled automatically)
+        // Only updates if 30+ seconds passed OR user moved 100+ meters
+        updateUserLocation(user?.id, locationData, false).catch(err => {
+          console.error('Error updating user location:', err);
+        });
         
         // Periodic cleanup every 5 minutes
         const now = Date.now();

@@ -125,6 +125,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      // Reset location update manager state on logout
+      const { locationUpdateManager } = await import('./location');
+      locationUpdateManager.reset();
+      
       await supabase.auth.signOut();
     } catch (error: any) {
       console.error('Sign out error:', error);

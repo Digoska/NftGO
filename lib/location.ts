@@ -572,3 +572,167 @@ export class LocationValidator {
 // Export singleton instance
 export const locationValidator = new LocationValidator();
 
+/**
+ * Location update manager for syncing user location to Supabase
+ * Implements throttling to prevent database spam while ensuring security
+ */
+class LocationUpdateManager {
+  private lastUpdateTime: number = 0;
+  private lastUpdateLocation: { lat: number; lon: number } | null = null;
+  private readonly MIN_UPDATE_INTERVAL_MS = 30 * 1000; // 30 seconds minimum between updates
+  private readonly MIN_DISTANCE_METERS = 100; // 100 meters minimum movement
+  private updateInProgress: boolean = false;
+
+  /**
+   * Updates user location in Supabase database
+   * Only updates if enough time has passed OR user moved significant distance
+   * @param userId - Authenticated user ID
+   * @param lat - Current latitude
+   * @param lon - Current longitude
+   * @param force - Force update regardless of throttling (for critical actions)
+   * @returns Promise<boolean> - true if update was sent, false if throttled
+   */
+  async updateUserLocation(
+    userId: string | null | undefined,
+    lat: number,
+    lon: number,
+    force: boolean = false
+  ): Promise<boolean> {
+    // Validate inputs
+    if (!userId) {
+      console.log('📍 LocationUpdate: Skipping update - user not authenticated');
+      return false;
+    }
+
+    if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      console.error('📍 LocationUpdate: Invalid coordinates', { lat, lon });
+      return false;
+    }
+
+    const now = Date.now();
+    const timeSinceLastUpdate = now - this.lastUpdateTime;
+
+    // Check if we should update based on time
+    const timeThresholdMet = timeSinceLastUpdate >= this.MIN_UPDATE_INTERVAL_MS;
+
+    // Check if we should update based on distance
+    let distanceThresholdMet = false;
+    if (this.lastUpdateLocation) {
+      const distanceMoved = calculateDistance(
+        this.lastUpdateLocation.lat,
+        this.lastUpdateLocation.lon,
+        lat,
+        lon
+      );
+      distanceThresholdMet = distanceMoved >= this.MIN_DISTANCE_METERS;
+    } else {
+      // No previous location, always update on first call
+      distanceThresholdMet = true;
+    }
+
+    // Update if forced, time threshold met, or distance threshold met
+    if (!force && !timeThresholdMet && !distanceThresholdMet) {
+      console.log(
+        `📍 LocationUpdate: Throttled - Time: ${Math.round(timeSinceLastUpdate / 1000)}s, ` +
+        `Distance: ${this.lastUpdateLocation ? Math.round(calculateDistance(this.lastUpdateLocation.lat, this.lastUpdateLocation.lon, lat, lon)) : 0}m`
+      );
+      return false;
+    }
+
+    // Prevent concurrent updates
+    if (this.updateInProgress) {
+      console.log('📍 LocationUpdate: Update already in progress, skipping');
+      return false;
+    }
+
+    this.updateInProgress = true;
+
+    try {
+      // Import supabase dynamically to avoid circular dependencies
+      const { supabase } = await import('./supabase');
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          last_known_lat: lat,
+          last_known_lon: lon,
+          last_location_update: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('📍 LocationUpdate: Database error:', error);
+        // Don't throw - log error but don't crash the app
+        return false;
+      }
+
+      // Update tracking state
+      this.lastUpdateTime = now;
+      this.lastUpdateLocation = { lat, lon };
+
+      console.log(
+        `✅ LocationUpdate: Updated user location (${lat.toFixed(6)}, ${lon.toFixed(6)}) ` +
+        `${force ? '[FORCED]' : ''}`
+      );
+
+      return true;
+    } catch (error) {
+      console.error('📍 LocationUpdate: Unexpected error:', error);
+      return false;
+    } finally {
+      this.updateInProgress = false;
+    }
+  }
+
+  /**
+   * Resets the throttling state (useful for testing or after logout)
+   */
+  reset(): void {
+    this.lastUpdateTime = 0;
+    this.lastUpdateLocation = null;
+    this.updateInProgress = false;
+    console.log('📍 LocationUpdate: Reset throttling state');
+  }
+
+  /**
+   * Gets the time until next update is allowed (in milliseconds)
+   */
+  getTimeUntilNextUpdate(): number {
+    const timeSinceLastUpdate = Date.now() - this.lastUpdateTime;
+    return Math.max(0, this.MIN_UPDATE_INTERVAL_MS - timeSinceLastUpdate);
+  }
+}
+
+// Export singleton instance
+export const locationUpdateManager = new LocationUpdateManager();
+
+/**
+ * Convenience function to update user location in Supabase
+ * Automatically handles throttling and error handling
+ * 
+ * @param userId - Authenticated user ID (from useAuth hook)
+ * @param location - Location object with latitude and longitude
+ * @param force - Force immediate update (bypass throttling) - use before critical actions
+ * @returns Promise<boolean> - true if update was sent, false if throttled or failed
+ * 
+ * @example
+ * // Regular update (throttled)
+ * await updateUserLocation(user?.id, location);
+ * 
+ * @example
+ * // Force update before collecting NFT
+ * await updateUserLocation(user?.id, location, true);
+ */
+export async function updateUserLocation(
+  userId: string | null | undefined,
+  location: { latitude: number; longitude: number },
+  force: boolean = false
+): Promise<boolean> {
+  return locationUpdateManager.updateUserLocation(
+    userId,
+    location.latitude,
+    location.longitude,
+    force
+  );
+}
+
