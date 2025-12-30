@@ -549,12 +549,16 @@ async function createNewSpawns(
       // Select a balanced sector for this spawn
       const selectedSector = selectBalancedSector(sectorCounts);
       
+      // Calculate bearing range for the selected sector
+      const minBearing = selectedSector * SECTOR_SIZE;
+      const maxBearing = minBearing + SECTOR_SIZE;
+      
       // Generate random location within spawn radius in the selected sector
       const location = generateRandomPoint(
         userLat,
         userLon,
         SPAWN_RADIUS_METERS,
-        { sectorIndex: selectedSector, sectorSize: SECTOR_SIZE }
+        { minBearing, maxBearing }
       );
       
       // Calculate distance from player to validate spawn placement

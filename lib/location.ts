@@ -181,7 +181,7 @@ export function generateRandomPoint(
   centerLat: number,
   centerLon: number,
   radiusMeters: number,
-  targetSector?: { sectorIndex: number; sectorSize: number }
+  options?: { minBearing?: number; maxBearing?: number }
 ): { latitude: number; longitude: number } {
   // Convert radius from meters to degrees (approximate)
   // 1 degree latitude is approx 111,320 meters
@@ -190,14 +190,14 @@ export function generateRandomPoint(
   const u = Math.random();
   let t: number;
   
-  if (targetSector !== undefined) {
-    // Generate angle within the specified sector
-    const sectorStartAngle = targetSector.sectorIndex * targetSector.sectorSize;
-    const sectorEndAngle = sectorStartAngle + targetSector.sectorSize;
-    // Convert to radians and generate random angle within sector
-    const sectorStartRad = (sectorStartAngle * Math.PI) / 180;
-    const sectorEndRad = (sectorEndAngle * Math.PI) / 180;
-    t = sectorStartRad + Math.random() * (sectorEndRad - sectorStartRad);
+  if (options?.minBearing !== undefined && options?.maxBearing !== undefined) {
+    // Generate angle within the specified bearing range
+    const minBearing = options.minBearing;
+    const maxBearing = options.maxBearing;
+    // Convert to radians and generate random angle within range
+    const minBearingRad = (minBearing * Math.PI) / 180;
+    const maxBearingRad = (maxBearing * Math.PI) / 180;
+    t = minBearingRad + Math.random() * (maxBearingRad - minBearingRad);
   } else {
     // Random angle 0-360° (existing behavior)
     const v = Math.random();
