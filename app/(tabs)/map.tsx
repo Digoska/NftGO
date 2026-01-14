@@ -81,10 +81,8 @@ export default function MapScreen() {
       return;
     }
     
-    if (spawnsLoadedRef.current) {
-      console.log('🔍 LOCATION: loadSpawns - Already loaded, skipping');
-      return;
-    }
+    // Always attempt load if not loaded, even if check says otherwise
+    // The loadSpawnsForLocation function handles the ref check
     
     console.log('🔍 LOCATION: Conditions met, calling loadSpawnsForLocation...');
     loadSpawnsForLocation(location, false);
@@ -320,6 +318,8 @@ export default function MapScreen() {
         console.error('❌ getSpawnsWithAutoGeneration error:', result.error);
         setSpawns([]);
         setAllActiveSpawns([]);
+        // Reset ref so we try again next time
+        spawnsLoadedRef.current = false;
         return;
       }
       
@@ -371,6 +371,7 @@ export default function MapScreen() {
   // Force refresh - ONLY when user taps the button
   // SECURITY: Uses secure forceRefreshSpawns() function (dev mode only)
   const handleForceRefresh = async () => {
+    // SECURITY: This function is strictly DEV only
     if (!__DEV__) {
        console.log('Force refresh is only available in development mode');
        return;
@@ -584,7 +585,7 @@ export default function MapScreen() {
             >
               <Ionicons name="refresh" size={18} color={loadingSpawns ? colors.textMuted : colors.primary} />
               <Text style={[styles.refreshButtonText, loadingSpawns && { color: colors.textMuted }]}>
-                {loadingSpawns ? 'Refreshing...' : '🔄 Force Refresh Spawns'}
+                {loadingSpawns ? 'Refreshing...' : '🔄 Force Refresh Spawns (DEV)'}
               </Text>
             </TouchableOpacity>
             
@@ -691,19 +692,21 @@ export default function MapScreen() {
         <Ionicons name="locate" size={24} color={colors.primary} />
       </TouchableOpacity>
 
-      {/* Refresh spawns button (for testing) */}
-      <TouchableOpacity
-        style={styles.refreshMapButton}
-        onPress={handleForceRefresh}
-        activeOpacity={0.8}
-        disabled={loadingSpawns}
-      >
-        <Ionicons 
-          name="refresh" 
-          size={24} 
-          color={loadingSpawns ? colors.textMuted : colors.primary} 
-        />
-      </TouchableOpacity>
+      {/* Refresh spawns button (for testing) - DEV ONLY */}
+      {__DEV__ && (
+        <TouchableOpacity
+          style={styles.refreshMapButton}
+          onPress={handleForceRefresh}
+          activeOpacity={0.8}
+          disabled={loadingSpawns}
+        >
+          <Ionicons 
+            name="refresh" 
+            size={24} 
+            color={loadingSpawns ? colors.textMuted : colors.primary} 
+          />
+        </TouchableOpacity>
+      )}
 
       {/* Collection Modal */}
         {user && (
