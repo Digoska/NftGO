@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,7 @@ export default function ResetPasswordScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const processedHashRef = useRef<string | null>(null);
 
   // Helper function to parse hash from URL
   const parseHashFromUrl = (urlString: string) => {
@@ -56,6 +57,38 @@ export default function ResetPasswordScreen() {
     }
   };
 
+  const handleRecoverySession = async (accessToken: string, refreshToken: string) => {
+    // Prevent duplicate processing
+    if (processedHashRef.current === accessToken) return;
+    processedHashRef.current = accessToken;
+
+    console.log('✅ Setting recovery session...');
+    try {
+      // Set flag BEFORE setting session to prevent redirect race condition
+      await AsyncStorage.setItem('isResettingPassword', 'true');
+      
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken || '',
+      });
+      
+      if (error) {
+        console.error('❌ Error setting recovery session:', error);
+        await AsyncStorage.removeItem('isResettingPassword');
+        Alert.alert('Error', 'Invalid or expired reset link. Please request a new one.');
+        return;
+      }
+      
+      if (data.session) {
+        console.log('✅ Recovery session established');
+        setStep('new-password');
+      }
+    } catch (err: any) {
+      console.error('❌ Exception setting recovery session:', err);
+      await AsyncStorage.removeItem('isResettingPassword');
+    }
+  };
+
   // Check if we're coming from a password reset link
   useEffect(() => {
     const handleDeepLink = async () => {
@@ -67,27 +100,7 @@ export default function ResetPasswordScreen() {
           const hashParams = parseHashFromUrl(initialUrl);
           
           if (hashParams?.access_token && hashParams.type === 'recovery') {
-            console.log('✅ Password reset token found in initial URL');
-            // Set the session with the recovery token
-            try {
-              const { data, error } = await supabase.auth.setSession({
-                access_token: hashParams.access_token,
-                refresh_token: hashParams.refresh_token || '',
-              });
-              
-              if (error) {
-                console.error('❌ Error setting recovery session:', error);
-                Alert.alert('Error', 'Invalid or expired reset link. Please request a new one.');
-                return;
-              }
-              
-              if (data.session) {
-                await AsyncStorage.setItem('isResettingPassword', 'true');
-                setStep('new-password');
-              }
-            } catch (err: any) {
-              console.error('❌ Exception setting recovery session:', err);
-            }
+            await handleRecoverySession(hashParams.access_token, hashParams.refresh_token || '');
           }
         }
       } catch (err) {
@@ -97,25 +110,7 @@ export default function ResetPasswordScreen() {
       // Also check params from expo-router
       if (params?.access_token && params?.type === 'recovery') {
         console.log('✅ Password reset token found in params');
-        try {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: params.access_token as string,
-            refresh_token: (params.refresh_token as string) || '',
-          });
-          
-          if (error) {
-            console.error('❌ Error setting recovery session:', error);
-            Alert.alert('Error', 'Invalid or expired reset link. Please request a new one.');
-            return;
-          }
-          
-          if (data.session) {
-            await AsyncStorage.setItem('isResettingPassword', 'true');
-            setStep('new-password');
-          }
-        } catch (err: any) {
-          console.error('❌ Exception setting recovery session:', err);
-        }
+        await handleRecoverySession(params.access_token as string, (params.refresh_token as string) || '');
       }
     };
 
@@ -127,21 +122,7 @@ export default function ResetPasswordScreen() {
       const hashParams = parseHashFromUrl(event.url);
       
       if (hashParams?.access_token && hashParams.type === 'recovery') {
-        supabase.auth.setSession({
-          access_token: hashParams.access_token,
-          refresh_token: hashParams.refresh_token || '',
-        }).then(({ data, error }) => {
-          if (error) {
-            console.error('❌ Error setting recovery session from deep link:', error);
-            Alert.alert('Error', 'Invalid or expired reset link. Please request a new one.');
-            return;
-          }
-          
-          if (data.session) {
-            await AsyncStorage.setItem('isResettingPassword', 'true');
-            setStep('new-password');
-          }
-        });
+        handleRecoverySession(hashParams.access_token, hashParams.refresh_token || '');
       }
     });
 
@@ -542,4 +523,3 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
 });
-
