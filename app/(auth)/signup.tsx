@@ -114,20 +114,8 @@ export default function SignupScreen() {
         return;
       }
 
-      // STRICT VALIDATION: Ensure session is actually established
-      if (!data.session) {
-        // Double check if session was set asynchronously
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        
-        if (!currentSession) {
-          console.error('OTP verified but no session established');
-          setCodeError('Verification successful but session failed. Please try again.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // If verification successful AND session exists, move to password step
+      // If verification successful, move to password step
+      // NOTE: session creation happens asynchronously and _layout.tsx allows 'signup' route
       setStep('password');
     } catch (error: any) {
       console.error('Verification error:', error);
@@ -151,7 +139,7 @@ export default function SignupScreen() {
     setPasswordError('');
     setLoading(true);
     try {
-      // Check if we have a session (should be guaranteed by handleCodeComplete)
+      // Check if we have a session
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
