@@ -114,11 +114,23 @@ export default function SignupScreen() {
         return;
       }
 
-      // If verification successful, move to password step
-      if (data.session) {
-        setStep('password');
+      // STRICT VALIDATION: Ensure session is actually established
+      if (!data.session) {
+        // Double check if session was set asynchronously
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (!currentSession) {
+          console.error('OTP verified but no session established');
+          setCodeError('Verification successful but session failed. Please try again.');
+          setLoading(false);
+          return;
+        }
       }
+
+      // If verification successful AND session exists, move to password step
+      setStep('password');
     } catch (error: any) {
+      console.error('Verification error:', error);
       setCodeError('Verification failed. Please try again.');
     } finally {
       setLoading(false);
@@ -139,30 +151,16 @@ export default function SignupScreen() {
     setPasswordError('');
     setLoading(true);
     try {
-      // Check if we have a session (from OTP verification)
+      // Check if we have a session (should be guaranteed by handleCodeComplete)
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        // Re-verify OTP to get session
-        if (verificationCode && verificationCode.length >= 6) {
-          const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-            email: email.trim(),
-            token: verificationCode,
-            type: 'email',
-          });
-
-          if (verifyError || !verifyData.session) {
-            setPasswordError('Session expired. Please verify your email again.');
-            setStep('verify');
-            setLoading(false);
-            return;
-          }
-        } else {
-          setPasswordError('Please verify your email first.');
-          setStep('verify');
-          setLoading(false);
-          return;
-        }
+        // Session lost (e.g. reload or timeout)
+        // We cannot re-use the OTP code as it's likely consumed
+        setPasswordError('Session expired. Please verify your email again.');
+        setStep('verify');
+        setLoading(false);
+        return;
       }
 
       // Update password
