@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Linking,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../../components/common/Button';
@@ -81,6 +82,7 @@ export default function ResetPasswordScreen() {
               }
               
               if (data.session) {
+                await AsyncStorage.setItem('isResettingPassword', 'true');
                 setStep('new-password');
               }
             } catch (err: any) {
@@ -108,6 +110,7 @@ export default function ResetPasswordScreen() {
           }
           
           if (data.session) {
+            await AsyncStorage.setItem('isResettingPassword', 'true');
             setStep('new-password');
           }
         } catch (err: any) {
@@ -135,6 +138,7 @@ export default function ResetPasswordScreen() {
           }
           
           if (data.session) {
+            await AsyncStorage.setItem('isResettingPassword', 'true');
             setStep('new-password');
           }
         });
@@ -230,6 +234,7 @@ export default function ResetPasswordScreen() {
       }
 
       // Success - show alert and navigate to login
+      await AsyncStorage.removeItem('isResettingPassword');
       Alert.alert(
         'Password Updated',
         'Your password has been successfully updated. You can now sign in with your new password.',

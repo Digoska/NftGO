@@ -69,13 +69,25 @@ export default function MapScreen() {
 
   // Load spawns ONCE when user and location are available
   useEffect(() => {
-    console.log('🔍 LOCATION: loadSpawns useEffect triggered - user?.id:', user?.id, 'location:', location, 'spawnsLoadedRef.current:', spawnsLoadedRef.current);
-    if (user?.id && location && !spawnsLoadedRef.current) {
-      console.log('🔍 LOCATION: Conditions met, calling loadSpawnsForLocation...');
-      loadSpawnsForLocation(location, false);
-    } else {
-      console.log('🔍 LOCATION: loadSpawns conditions not met - skipping');
+    console.log('🔍 LOCATION: loadSpawns useEffect triggered - user?.id:', user?.id, 'location:', location ? `${location.latitude}, ${location.longitude}` : 'null', 'spawnsLoadedRef.current:', spawnsLoadedRef.current);
+    
+    if (!user?.id) {
+      console.log('🔍 LOCATION: loadSpawns - No user ID, skipping');
+      return;
     }
+    
+    if (!location) {
+      console.log('🔍 LOCATION: loadSpawns - No location, skipping');
+      return;
+    }
+    
+    if (spawnsLoadedRef.current) {
+      console.log('🔍 LOCATION: loadSpawns - Already loaded, skipping');
+      return;
+    }
+    
+    console.log('🔍 LOCATION: Conditions met, calling loadSpawnsForLocation...');
+    loadSpawnsForLocation(location, false);
   }, [user?.id, location]);
 
   // Reveal spawns as player moves (1km visibility radius)
@@ -137,7 +149,7 @@ export default function MapScreen() {
     try {
       console.log('🔍 LOCATION: About to call fetchLocationFromDevice()...');
       const loc = await fetchLocationFromDevice();
-      console.log('🔍 LOCATION: fetchLocationFromDevice() returned:', loc);
+      console.log('🔍 LOCATION: fetchLocationFromDevice() returned:', JSON.stringify(loc));
       if (loc) {
         console.log('🔍 LOCATION: Location received, setting location state...');
         setLocation(loc);
@@ -145,12 +157,17 @@ export default function MapScreen() {
         startLocationWatching();
         console.log('🔍 LOCATION: Location initialization successful');
       } else {
-        console.log('🔍 LOCATION: No location returned, showing alert...');
+        console.log('🔍 LOCATION: No location returned from fetchLocationFromDevice');
+        
+        // Double check permissions
+        const { status } = await Location.getForegroundPermissionsAsync();
+        console.log('🔍 LOCATION: Current permission status:', status);
+        
+        console.log('🔍 LOCATION: Showing alert...');
         Alert.alert(
           'Permissions',
           'NftGO needs access to your location. Please enable location access in settings.'
         );
-        console.log('🔍 LOCATION: Alert shown');
       }
     } catch (error) {
       console.error('🔍 LOCATION: Error in initializeLocation():', error);
@@ -248,72 +265,117 @@ export default function MapScreen() {
   };
 
   const loadSpawnsForLocation = async (loc: { latitude: number; longitude: number }, forceReload = false) => {
-    if (!user?.id) return;
+    console.log('📍 loadSpawnsForLocation called:', {
+      lat: loc.latitude,
+      lon: loc.longitude,
+      userId: user?.id,
+      forceReload,
+      spawnsLoadedRef: spawnsLoadedRef.current
+    });
+    
+    if (!user?.id) {
+      console.error('❌ loadSpawnsForLocation: No user ID available');
+      return;
+    }
+    
+    // Check location validity
+    if (!loc || !isFinite(loc.latitude) || !isFinite(loc.longitude)) {
+      console.error('❌ loadSpawnsForLocation: Invalid location coordinates:', loc);
+      return;
+    }
+    
+    // Check location accuracy if available
+    if (loc.accuracy && loc.accuracy > 1000) {
+      console.warn('⚠️ loadSpawnsForLocation: Low location accuracy:', loc.accuracy, 'meters');
+    }
     
     // Prevent duplicate loading on initial mount (unless forced)
-    if (!forceReload && spawnsLoadedRef.current) return;
+    if (!forceReload && spawnsLoadedRef.current) {
+      console.log('📍 loadSpawnsForLocation: Skipping - already loaded (use forceReload=true to override)');
+      return;
+    }
     if (!forceReload) {
       spawnsLoadedRef.current = true;
     }
     
     setLoadingSpawns(true);
     try {
-      console.log('📍 Loading spawns for user...');
+      console.log('📍 Loading spawns for user:', user.id, 'at location:', loc.latitude, loc.longitude);
       
       // Use secure RPC-based spawn system with automatic generation
       // This enforces rate limiting and handles generation securely
+      console.log('📍 Calling getSpawnsWithAutoGeneration...');
       const result = await getSpawnsWithAutoGeneration(
         loc.latitude,
         loc.longitude
       );
       
-      // Load ALL active spawns (including buffer zone) so they can be revealed as player moves
-      // This ensures smooth discovery - spawns in buffer zone are in state, just filtered for display
-      const allActiveSpawns = await getActivePersonalSpawns(user.id);
+      console.log('📍 getSpawnsWithAutoGeneration result:', {
+        error: result.error,
+        hasSpawns: !!result.spawns,
+        spawnCount: result.spawns?.length || 0
+      });
       
-      if (!result.error) {
-        // Store all active spawns in state (for smooth reveal as player moves)
-        setAllActiveSpawns(allActiveSpawns);
-        
-        // Filter spawns to only show visible ones (within visibility radius)
-        // Buffer zone spawns (1-2km) are in allActiveSpawns but hidden until player moves closer
-        const visibleSpawns = allActiveSpawns.filter(spawn => {
-          const distance = calculateDistance(
-            loc.latitude,
-            loc.longitude,
-            spawn.latitude,
-            spawn.longitude
-          );
-          return distance <= VISIBILITY_RADIUS_METERS;
-        });
-        
-        // Display only visible spawns
-        setSpawns(visibleSpawns);
-        console.log(`✅ Loaded ${visibleSpawns.length} visible spawns (${allActiveSpawns.length} total active in 2km buffer)`);
-        
-        // Log rarity distribution
-        const distribution = visibleSpawns.reduce((acc, s) => {
-          const rarity = s.nft?.rarity || 'unknown';
-          acc[rarity] = (acc[rarity] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-        console.log('Rarity distribution:', distribution);
-      } else {
+      if (result.error) {
+        console.error('❌ getSpawnsWithAutoGeneration error:', result.error);
         setSpawns([]);
         setAllActiveSpawns([]);
+        return;
       }
+      
+      // Load ALL active spawns (including buffer zone) so they can be revealed as player moves
+      // This ensures smooth discovery - spawns in buffer zone are in state, just filtered for display
+      console.log('📍 Loading all active personal spawns for user:', user.id);
+      const allActiveSpawns = await getActivePersonalSpawns(user.id);
+      console.log('📍 getActivePersonalSpawns returned:', allActiveSpawns.length, 'spawns');
+      
+      // Store all active spawns in state (for smooth reveal as player moves)
+      setAllActiveSpawns(allActiveSpawns);
+      
+      // Filter spawns to only show visible ones (within visibility radius)
+      // Buffer zone spawns (1-2km) are in allActiveSpawns but hidden until player moves closer
+      const visibleSpawns = allActiveSpawns.filter(spawn => {
+        const distance = calculateDistance(
+          loc.latitude,
+          loc.longitude,
+          spawn.latitude,
+          spawn.longitude
+        );
+        return distance <= VISIBILITY_RADIUS_METERS;
+      });
+      
+      // Display only visible spawns
+      setSpawns(visibleSpawns);
+      console.log(`✅ Loaded ${visibleSpawns.length} visible spawns (${allActiveSpawns.length} total active in 2km buffer)`);
+      
+      // Log rarity distribution
+      const distribution = visibleSpawns.reduce((acc, s) => {
+        const rarity = s.nft?.rarity || 'unknown';
+        acc[rarity] = (acc[rarity] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('Rarity distribution:', distribution);
     } catch (error) {
-      console.error('Error loading spawns:', error);
+      console.error('❌ Error loading spawns:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
       // Reset ref on error to allow retry
       spawnsLoadedRef.current = false;
+      setSpawns([]);
+      setAllActiveSpawns([]);
     } finally {
       setLoadingSpawns(false);
+      console.log('📍 loadSpawnsForLocation completed');
     }
   };
 
   // Force refresh - ONLY when user taps the button
   // SECURITY: Uses secure forceRefreshSpawns() function (dev mode only)
   const handleForceRefresh = async () => {
+    if (!__DEV__) {
+       console.log('Force refresh is only available in development mode');
+       return;
+    }
+
     if (!user?.id || !location) {
       Alert.alert('Error', 'Location not available. Please try again.');
       return;

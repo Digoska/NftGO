@@ -1,22 +1,32 @@
 import { Stack, Redirect, useSegments } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 
 export default function AuthLayout() {
   const { session, loading } = useAuth();
   const segments = useSegments();
+  const [isResetting, setIsResetting] = useState(false);
+  const [checkingReset, setCheckingReset] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    AsyncStorage.getItem('isResettingPassword').then(val => {
+      setIsResetting(val === 'true');
+      setCheckingReset(false);
+    });
+  }, [session]);
+
+  if (loading || checkingReset) {
     return null;
   }
 
-  // Check if we are on the reset-password screen
-  // The segments array might look like ['(auth)', 'reset-password']
-  const inAuthGroup = segments[0] === '(auth)';
-  const isResetPassword = segments[1] === 'reset-password';
+  // Check if we are on the reset-password or signup screen
+  // The segments array might look like ['(auth)', 'reset-password'] or ['(auth)', 'signup']
+  const isSignupOrReset = segments[1] === 'reset-password' || segments[1] === 'signup';
 
   // If user is already logged in, redirect to home
-  // But allow staying on reset-password screen (which uses a recovery session)
-  if (session && !isResetPassword) {
+  // But allow staying on reset-password screen (which uses a recovery session) or signup screen (setting password)
+  if (session && !isSignupOrReset && !isResetting) {
     return <Redirect href="/(tabs)" />;
   }
 
