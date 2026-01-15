@@ -264,6 +264,9 @@ export default function LoginScreen() {
                 Sign Up
               </Text>
             </View>
+            <View style={{ alignItems: 'center', marginTop: 20 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>v1.1.0-fix</Text>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -350,4 +353,3 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
 });
-
