@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
+import { Linking } from 'react-native';
 import { supabase } from './supabase';
 import { User } from '../types';
 
@@ -30,19 +31,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  // Initialize function to check for initial URL and handle session setup
+  const initialize = async () => {
+    // Check for initial URL (deep link when app opens)
+    try {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        console.log('🔗 Initial URL detected in auth context:', initialUrl);
+        // The deep link handling in _layout.tsx will handle navigation
+        // We just need to ensure session is checked here
+      }
+    } catch (error) {
+      console.error('Error getting initial URL:', error);
+    }
+
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Error getting session:', error);
-      }
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserProfile(session.user.id);
-      }
-      setLoading(false);
-    });
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Error getting session:', error);
+    }
+    setSession(session);
+    setUser(session?.user ?? null);
+    if (session?.user) {
+      fetchUserProfile(session.user.id);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    initialize();
 
     // Listen for auth changes
     const {

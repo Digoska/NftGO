@@ -1,8 +1,8 @@
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '../lib/auth-context';
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import { requestNotificationPermissions, setupNotificationListeners } from '../lib/notifications';
 
@@ -108,6 +108,98 @@ export default function RootLayout() {
 
     return () => {
       unsubscribe();
+    };
+  }, []);
+
+  // Handle deep links for password reset
+  useEffect(() => {
+    // Robust function to parse tokens from both hash (#) and query params (?)
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+
+      console.log('🔗 Processing deep link URL:', url);
+
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+      let type: string | null = null;
+
+      try {
+        // Try to parse from hash fragment first (e.g., nftgo://reset-password#access_token=...)
+        const hashIndex = url.indexOf('#');
+        if (hashIndex !== -1) {
+          const hash = url.substring(hashIndex + 1);
+          const hashParams = new URLSearchParams(hash);
+          accessToken = hashParams.get('access_token');
+          refreshToken = hashParams.get('refresh_token');
+          type = hashParams.get('type');
+        }
+
+        // If not found in hash, try query params (e.g., nftgo://reset-password?access_token=...)
+        if (!accessToken) {
+          const queryIndex = url.indexOf('?');
+          if (queryIndex !== -1) {
+            const query = url.substring(queryIndex + 1);
+            // Remove hash if present in query string
+            const queryWithoutHash = query.split('#')[0];
+            const queryParams = new URLSearchParams(queryWithoutHash);
+            accessToken = queryParams.get('access_token') || accessToken;
+            refreshToken = queryParams.get('refresh_token') || refreshToken;
+            type = queryParams.get('type') || type;
+          }
+        }
+
+        // Also try parsing as a full URL
+        if (!accessToken) {
+          try {
+            const urlObj = new URL(url);
+            // Check hash fragment
+            if (urlObj.hash) {
+              const hashParams = new URLSearchParams(urlObj.hash.substring(1));
+              accessToken = hashParams.get('access_token') || accessToken;
+              refreshToken = hashParams.get('refresh_token') || refreshToken;
+              type = hashParams.get('type') || type;
+            }
+            // Check query params
+            if (!accessToken) {
+              accessToken = urlObj.searchParams.get('access_token') || accessToken;
+              refreshToken = urlObj.searchParams.get('refresh_token') || refreshToken;
+              type = urlObj.searchParams.get('type') || type;
+            }
+          } catch (e) {
+            // URL parsing failed, continue with previous values
+            console.log('⚠️ Could not parse as URL object, using manual parsing');
+          }
+        }
+
+        // If we found tokens and it's a recovery type, navigate to reset-password
+        if (accessToken && type === 'recovery') {
+          console.log('✅ Password reset tokens found, navigating to reset-password');
+          router.push({
+            pathname: '/(auth)/reset-password',
+            params: {
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+              type: type,
+            },
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error parsing deep link URL:', error);
+      }
+    };
+
+    // Check initial URL when app opens
+    Linking.getInitialURL().then((url) => {
+      handleUrl(url);
+    });
+
+    // Listen for deep links while app is running
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleUrl(event.url);
+    });
+
+    return () => {
+      subscription.remove();
     };
   }, []);
 
