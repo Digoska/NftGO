@@ -39,7 +39,7 @@ export default function Input({
         secureTextEntry={secureTextEntry}
         {...props}
       />
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && error.trim() && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 }

@@ -479,7 +479,7 @@ export default function SignupScreen() {
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
 
-            <Text style={styles.stepTitle}>Add your email 1/3</Text>
+            <Text style={styles.stepTitle}>Add your email 1/4</Text>
             
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Email</Text>
@@ -518,7 +518,7 @@ export default function SignupScreen() {
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
 
-            <Text style={styles.stepTitle}>Verify your email 2/3</Text>
+            <Text style={styles.stepTitle}>Verify your email 2/4</Text>
             <Text style={styles.stepSubtitle}>
               We just sent a verification code to{'\n'}
               <Text style={styles.emailText}>{email}</Text>

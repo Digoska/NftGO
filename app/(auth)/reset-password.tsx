@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import PasswordStrength from '../../components/auth/PasswordStrength';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
@@ -149,8 +150,13 @@ export default function ResetPasswordScreen() {
       setPasswordError('Password is required');
       return false;
     }
-    if (newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters');
+    // Validate password strength (minimum 8 characters, number, and symbol)
+    const hasMinLength = newPassword.length >= 8;
+    const hasNumber = /\d/.test(newPassword);
+    const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+
+    if (!hasMinLength || !hasNumber || !hasSymbol) {
+      setPasswordError('Password must meet all requirements');
       return false;
     }
     if (newPassword !== confirmPassword) {
@@ -322,6 +328,8 @@ export default function ResetPasswordScreen() {
                   </TouchableOpacity>
                 }
               />
+
+              <PasswordStrength password={newPassword} />
 
               <Input
                 label="Confirm Password"

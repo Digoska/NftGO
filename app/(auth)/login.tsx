@@ -6,7 +6,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   TouchableOpacity,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -27,6 +26,7 @@ export default function LoginScreen() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
     {}
   );
+  const [loginError, setLoginError] = useState('');
   const { signIn, signInWithGoogle } = useAuth();
 
   const validate = () => {
@@ -59,6 +59,7 @@ export default function LoginScreen() {
     console.log('🔐 Password length:', password.length);
     console.log('🔐 Email format valid:', /\S+@\S+\.\S+/.test(email));
     setLoading(true);
+    setLoginError('');
     
     try {
       const { error } = await signIn(email, password);
@@ -71,7 +72,6 @@ export default function LoginScreen() {
         
         // Show detailed error with helpful suggestions
         let errorMessage = 'Login failed';
-        let helpfulTip = '';
         
         if (error.message) {
           errorMessage = error.message;
@@ -79,51 +79,27 @@ export default function LoginScreen() {
           // Provide helpful tips based on error message
           if (error.message.toLowerCase().includes('invalid login credentials') || 
               error.message.toLowerCase().includes('invalid credentials')) {
-            errorMessage = 'Invalid email or password';
-            helpfulTip = 'Please check your email and password. If you forgot your password, you may need to reset it.';
+            errorMessage = 'Invalid email or password. Please check your credentials.';
           } else if (error.message.toLowerCase().includes('email not confirmed') ||
                      error.message.toLowerCase().includes('email not verified')) {
-            errorMessage = 'Please verify your email address';
-            helpfulTip = 'Check your inbox for a verification email and click the confirmation link.';
+            errorMessage = 'Please verify your email address. Check your inbox for a verification email.';
           } else if (error.message.toLowerCase().includes('user not found')) {
-            errorMessage = 'Account not found';
-            helpfulTip = 'This email address is not registered. Please sign up first.';
+            errorMessage = 'Account not found. This email address is not registered.';
           }
         } else if (error.status === 400) {
-          errorMessage = 'Invalid email or password';
-          helpfulTip = 'Please check your email and password.';
+          errorMessage = 'Invalid email or password. Please check your credentials.';
         } else if (error.status === 401) {
-          errorMessage = 'Invalid credentials';
-          helpfulTip = 'The email or password you entered is incorrect.';
+          errorMessage = 'Invalid credentials. The email or password you entered is incorrect.';
         } else if (error.status === 429) {
-          errorMessage = 'Too many login attempts';
-          helpfulTip = 'Please wait a few minutes before trying again.';
+          errorMessage = 'Too many login attempts. Please wait a few minutes before trying again.';
         }
         
-        const alertButtons = [{ text: 'OK' }];
-        if (__DEV__) {
-          alertButtons.push({
-            text: 'Debug Info',
-            onPress: () => {
-              Alert.alert(
-                'Debug Information',
-                `Status: ${error.status || 'N/A'}\n` +
-                `Message: ${error.message || 'N/A'}\n` +
-                `Email: ${email}\n` +
-                `Password Length: ${password.length}`,
-                [{ text: 'OK' }]
-              );
-            }
-          });
-        }
-        
-        Alert.alert(
-          'Login Error',
-          helpfulTip ? `${errorMessage}\n\n${helpfulTip}` : errorMessage,
-          alertButtons
-        );
+        setLoginError(errorMessage);
+        // Highlight input fields with error
+        setErrors({ email: '', password: '' });
       } else {
         console.log('✅ Login successful!');
+        setLoginError('');
         // Navigation will happen automatically via auth state change
         router.replace('/(tabs)');
       }
@@ -138,7 +114,8 @@ export default function LoginScreen() {
         console.error('❌ Make sure to run: npx expo prebuild --platform ios');
       }
       
-      Alert.alert('Error', errorMessage);
+      setLoginError(errorMessage);
+      setErrors({ email: '', password: '' });
     } finally {
       setLoading(false);
     }
@@ -167,15 +144,16 @@ export default function LoginScreen() {
           errorMessage = 'Failed to get OAuth URL. Please verify Google OAuth is enabled and configured in Supabase dashboard.';
         }
         
-        Alert.alert('Sign In Error', errorMessage);
+        setLoginError(errorMessage);
       } else {
+        setLoginError('');
         // Navigation will happen automatically via auth state change
         console.log('✅ Google OAuth initiated successfully');
         // Don't navigate here - wait for auth state change
       }
     } catch (err: any) {
       console.error('❌ Google login exception:', err);
-      Alert.alert('Error', err.message || 'An unexpected error occurred');
+      setLoginError(err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -207,11 +185,12 @@ export default function LoginScreen() {
               onChangeText={(text) => {
                 setEmail(text);
                 if (errors.email) setErrors({ ...errors, email: undefined });
+                if (loginError) setLoginError('');
               }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
-              error={errors.email}
+              error={errors.email || (loginError ? ' ' : undefined)}
             />
 
             <Input
@@ -221,12 +200,17 @@ export default function LoginScreen() {
               onChangeText={(text) => {
                 setPassword(text);
                 if (errors.password) setErrors({ ...errors, password: undefined });
+                if (loginError) setLoginError('');
               }}
               secureTextEntry
               autoCapitalize="none"
               autoComplete="password"
-              error={errors.password}
+              error={errors.password || (loginError ? ' ' : undefined)}
             />
+
+            {loginError && (
+              <Text style={styles.errorText}>{loginError}</Text>
+            )}
 
             <TouchableOpacity
               style={styles.forgotPasswordContainer}
@@ -351,5 +335,11 @@ const styles = StyleSheet.create({
   },
   iconText: {
     fontSize: 20,
+  },
+  errorText: {
+    ...typography.small,
+    color: colors.error,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
 });
