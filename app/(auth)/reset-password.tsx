@@ -220,6 +220,9 @@ export default function ResetPasswordScreen() {
         return;
       }
 
+      // Sign out immediately after password update to prevent auto-login
+      await supabase.auth.signOut();
+
       // Success - show alert and navigate to login
       await AsyncStorage.removeItem('isResettingPassword');
       Alert.alert(
@@ -227,7 +230,7 @@ export default function ResetPasswordScreen() {
         'Your password has been successfully updated. You can now sign in with your new password.',
         [
           {
-            text: 'Sign In',
+            text: 'Back to Sign In',
             onPress: () => router.replace('/(auth)/login'),
           },
         ]
